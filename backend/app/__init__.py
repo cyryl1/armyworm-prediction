@@ -1,0 +1,3 @@
+"""
+Pest detection API package.
+"""
