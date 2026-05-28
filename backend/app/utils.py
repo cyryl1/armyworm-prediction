@@ -6,10 +6,16 @@ validation, temporary storage, and cleanup operations.
 """
 
 import os
+import base64
 import logging
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional
+
+import cv2
+import numpy as np
+from PIL import Image, ExifTags
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -151,6 +157,173 @@ def delete_file(file_path: Path) -> bool:
     except Exception as e:
         logger.error(f"Error deleting file {file_path}: {e}")
         return False
+
+
+def _convert_to_degrees(value) -> float:
+    """Convert EXIF GPS coordinates to decimal degrees."""
+    degrees = value[0][0] / value[0][1]
+    minutes = value[1][0] / value[1][1]
+    seconds = value[2][0] / value[2][1]
+    return degrees + (minutes / 60.0) + (seconds / 3600.0)
+
+
+def extract_gps_from_exif(image_path: Path) -> Tuple[Optional[float], Optional[float]]:
+    """Extract GPS coordinates from image EXIF metadata if present."""
+    try:
+        with Image.open(image_path) as image:
+            exif = image.getexif()
+            if not exif:
+                return None, None
+
+            gps_tag = None
+            for tag_id, tag_name in ExifTags.TAGS.items():
+                if tag_name == "GPSInfo":
+                    gps_tag = tag_id
+                    break
+
+            if gps_tag is None or gps_tag not in exif:
+                return None, None
+
+            gps_data = exif.get(gps_tag)
+            if not gps_data:
+                return None, None
+
+            gps_info = {}
+            for key, value in gps_data.items():
+                gps_info[ExifTags.GPSTAGS.get(key, key)] = value
+
+            lat = gps_info.get("GPSLatitude")
+            lat_ref = gps_info.get("GPSLatitudeRef")
+            lon = gps_info.get("GPSLongitude")
+            lon_ref = gps_info.get("GPSLongitudeRef")
+
+            if not lat or not lon or not lat_ref or not lon_ref:
+                return None, None
+
+            latitude = _convert_to_degrees(lat)
+            longitude = _convert_to_degrees(lon)
+
+            if str(lat_ref).upper() == "S":
+                latitude = -latitude
+            if str(lon_ref).upper() == "W":
+                longitude = -longitude
+
+            return latitude, longitude
+    except Exception as e:
+        logger.warning(f"Failed to extract EXIF GPS data from {image_path}: {e}")
+        return None, None
+
+
+def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
+    """Draw bounding boxes and labels on an image array (in-place).
+
+    Args:
+        image: BGR image as a numpy array.
+        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
+
+    Returns:
+        The same image array with annotations drawn.
+    """
+    for detection in detections:
+        x1, y1, x2, y2 = [int(round(coord)) for coord in detection.get("bbox", [])]
+        label = f"{detection.get('class_name', 'object')} {detection.get('confidence', 0):.2f}"
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(
+            image,
+            label,
+            (x1, max(y1 - 10, 20)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+    return image
+
+
+def annotate_detections(image_path: Path, detections: list, output_filename: Optional[str] = None) -> Path:
+    """Draw detection boxes on an image and save the annotated copy."""
+    image = cv2.imread(str(image_path))
+    if image is None:
+        raise ValueError(f"Cannot read image for annotation: {image_path}")
+
+    _draw_detections(image, detections)
+
+    if output_filename is None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        output_filename = f"{image_path.stem}_annotated_{timestamp}{image_path.suffix}"
+
+    output_path = get_temp_file_path(output_filename)
+    cv2.imwrite(str(output_path), image)
+    logger.info(f"Saved annotated image: {output_path}")
+    return output_path
+
+
+def annotate_detections_to_base64(
+    image_path: Path,
+    detections: list,
+    jpeg_quality: int = 70,
+) -> str:
+    """Draw detection boxes on an image and return as a base64-encoded JPEG.
+
+    Args:
+        image_path: Path to the source image file.
+        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
+        jpeg_quality: JPEG compression quality (1-100).
+
+    Returns:
+        Base64-encoded JPEG string of the annotated image.
+
+    Raises:
+        ValueError: If the image cannot be read.
+    """
+    image = cv2.imread(str(image_path))
+    if image is None:
+        raise ValueError(f"Cannot read image for annotation: {image_path}")
+
+    _draw_detections(image, detections)
+
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+    success, buffer = cv2.imencode(".jpg", image, encode_params)
+    if not success:
+        raise RuntimeError("Failed to encode annotated image to JPEG")
+
+    b64_str = base64.b64encode(buffer).decode("utf-8")
+    logger.info(f"Encoded annotated image to base64 ({len(b64_str)} chars)")
+    return b64_str
+
+
+def annotate_image_array_to_base64(
+    image: np.ndarray,
+    detections: list,
+    jpeg_quality: int = 70,
+) -> str:
+    """Draw detection boxes on an in-memory image array and return as base64 JPEG.
+
+    Args:
+        image: BGR image as a numpy array.
+        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
+        jpeg_quality: JPEG compression quality (1-100).
+
+    Returns:
+        Base64-encoded JPEG string of the annotated image.
+
+    Raises:
+        ValueError: If the image is None or empty.
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Cannot annotate empty or None image")
+
+    _draw_detections(image, detections)
+
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+    success, buffer = cv2.imencode(".jpg", image, encode_params)
+    if not success:
+        raise RuntimeError("Failed to encode annotated image to JPEG")
+
+    b64_str = base64.b64encode(buffer).decode("utf-8")
+    logger.info(f"Encoded annotated frame to base64 ({len(b64_str)} chars)")
+    return b64_str
 
 
 def cleanup_temp_directory() -> None:

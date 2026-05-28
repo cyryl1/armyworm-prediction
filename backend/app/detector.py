@@ -13,6 +13,8 @@ import torch
 import cv2
 from ultralytics import YOLO
 
+from app.recommendations import format_recommendation, get_recommendation_details
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -25,16 +27,6 @@ CLASS_NAMES = {
     3: "fall-armyworm-larval-damage",
     4: "healthy-maize",
     5: "maize-streak-disease",
-}
-
-# Pest management recommendations
-RECOMMENDATIONS = {
-    "fall-armyworm-egg": "Monitor egg clusters, consider removal or targeted spraying",
-    "fall-armyworm-frass": "Inspect surrounding leaves for larvae",
-    "fall-armyworm-larva": "Apply neem-based pesticide immediately",
-    "fall-armyworm-larval-damage": "Monitor crop and apply targeted control",
-    "healthy-maize": "No action needed",
-    "maize-streak-disease": "Use resistant maize varieties, control vector (leafhopper)",
 }
 
 # Global model instance (singleton pattern)
@@ -138,15 +130,13 @@ def get_class_name(class_id: int) -> str:
 
 
 def get_recommendation(class_name: str) -> str:
-    """Get pest management recommendation for a class.
-    
-    Args:
-        class_name: Name of the detected class
-        
-    Returns:
-        Recommendation string
-    """
-    return RECOMMENDATIONS.get(class_name, "No specific recommendation available")
+    """Get a compact pest management recommendation for a class."""
+    return format_recommendation(class_name)
+
+
+def get_recommendation_payload(class_name: str) -> Dict[str, str]:
+    """Get structured pest management guidance for a class."""
+    return get_recommendation_details(class_name)
 
 
 def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
@@ -207,6 +197,7 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
                 
                 # Get recommendation
                 recommendation = get_recommendation(class_name)
+                recommendation_details = get_recommendation_payload(class_name)
                 
                 detection = {
                     "class_id": class_id,
@@ -214,6 +205,7 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
                     "confidence": confidence,
                     "bbox": [x1, y1, x2, y2],
                     "recommendation": recommendation,
+                    "recommendation_details": recommendation_details,
                 }
                 
                 detections.append(detection)
@@ -228,6 +220,77 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
     except Exception as e:
         logger.error(f"Inference failed: {e}")
         raise RuntimeError(f"Inference failed: {e}")
+
+
+def detect_batch(image_paths: List[str], confidence_threshold: float = 0.5) -> List[List[Dict]]:
+    """Run YOLO inference on a batch of images and extract detection results for each.
+    
+    Args:
+        image_paths: List of paths to the image files
+        confidence_threshold: Minimum confidence score for detections (0-1)
+        
+    Returns:
+        List of lists of detection dictionaries, matching the input image_paths order.
+        
+    Raises:
+        RuntimeError: If model is not loaded or inference fails
+        ValueError: If any image cannot be read or is missing
+    """
+    if _model is None:
+        raise RuntimeError("Model not loaded. Call load_model() first.")
+    
+    if not image_paths:
+        return []
+        
+    # Verify all images exist and are readable
+    for path in image_paths:
+        image_file = Path(path)
+        if not image_file.exists():
+            raise ValueError(f"Image file not found: {path}")
+        image = cv2.imread(str(path))
+        if image is None:
+            raise ValueError(f"Cannot read image file: {path}")
+            
+    try:
+        logger.info(f"Running batch inference on {len(image_paths)} images")
+        
+        # Run YOLO inference in batch mode
+        results = _model.predict(image_paths, conf=confidence_threshold, verbose=False)
+        
+        batch_detections = []
+        
+        # Process each image's results
+        for idx, result in enumerate(results):
+            detections = []
+            boxes = result.boxes
+            
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                class_id = int(box.cls[0].item())
+                class_name = get_class_name(class_id)
+                confidence = float(box.conf[0].item())
+                
+                recommendation = get_recommendation(class_name)
+                recommendation_details = get_recommendation_payload(class_name)
+                
+                detection = {
+                    "class_id": class_id,
+                    "class_name": class_name,
+                    "confidence": confidence,
+                    "bbox": [x1, y1, x2, y2],
+                    "recommendation": recommendation,
+                    "recommendation_details": recommendation_details,
+                }
+                detections.append(detection)
+                
+            batch_detections.append(detections)
+            logger.info(f"Image {image_paths[idx]}: Found {len(detections)} detections")
+            
+        return batch_detections
+        
+    except Exception as e:
+        logger.error(f"Batch inference failed: {e}")
+        raise RuntimeError(f"Batch inference failed: {e}")
 
 
 def get_all_classes() -> Dict[int, str]:

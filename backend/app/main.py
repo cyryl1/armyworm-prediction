@@ -6,12 +6,14 @@ pest detection, health checks, and class information retrieval.
 """
 
 import logging
-from pathlib import Path
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
 from app import detector, utils
-from app.schemas import DetectionResponse, Detection, ClassesResponse, HealthResponse
+from app import history_store
+from app.routes import router as api_router
 
 # Configure logging
 logging.basicConfig(
@@ -20,12 +22,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Load environment variables from backend/.env during local development.
+load_dotenv()
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Pest Detection API",
     description="YOLOv8-based pest detection system for fall armyworms and maize diseases",
     version="1.0.0",
 )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Add API key security schema for x-api-key header
+    components = openapi_schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    security_schemes["ApiKeyAuth"] = {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+    }
+
+    # Mark protected endpoints with the security requirement so Swagger shows them
+    paths = openapi_schema.get("paths", {})
+    for p in ["/detect", "/history"]:
+        if p in paths:
+            for method in paths[p].keys():
+                paths[p][method]["security"] = [{"ApiKeyAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+# Include modular routes
+app.include_router(api_router)
 
 
 @app.on_event("startup")
@@ -39,8 +80,14 @@ async def startup_event():
     
     # Initialize temp directory
     utils.init_temp_directory()
+    try:
+        await history_store.init_db()
+        logger.info("MongoDB initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize MongoDB at startup: {e}")
+        logger.warning("Continuing without history persistence; history endpoints may be unavailable")
     
-        # Load model at startup (do not crash the app if model fails to load)
+    # Load model at startup (do not crash the app if model fails to load)
     try:
         # Let detector decide device (defaults to CPU if CUDA unavailable)
         detector.load_model("model/best.pt", device=None)
@@ -61,150 +108,7 @@ async def shutdown_event():
     utils.cleanup_temp_directory()
 
 
-@app.get("/", tags=["Status"])
-async def root():
-    """Root endpoint - confirms API is running.
-    
-    Returns:
-        Simple status message
-    """
-    logger.info("GET / - API status check")
-    return {"message": "Pest Detection API running"}
 
-
-@app.get("/health", response_model=HealthResponse, tags=["Status"])
-async def health():
-    """Health check endpoint for monitoring.
-    
-    Returns:
-        Health status and model load state
-    """
-    logger.info("GET /health - Health check")
-    return HealthResponse(
-        status="healthy",
-        model_loaded=detector.is_model_loaded(),
-    )
-
-
-@app.get("/classes", response_model=ClassesResponse, tags=["Information"])
-async def get_classes():
-    """Get all supported pest and disease classes.
-    
-    Returns:
-        Mapping of class IDs to class names
-    """
-    logger.info("GET /classes - Retrieving supported classes")
-    classes = detector.get_all_classes()
-    
-    # Convert int keys to strings for JSON serialization
-    classes_str = {str(k): v for k, v in classes.items()}
-    
-    return ClassesResponse(classes=classes_str)
-
-
-@app.post("/detect", response_model=DetectionResponse, tags=["Detection"])
-async def detect_pests(file: UploadFile = File(...)):
-    """Detect pests in uploaded image.
-    
-    This endpoint accepts an image file, runs YOLOv8 inference,
-    and returns detected pests with confidence scores, bounding boxes,
-    and management recommendations.
-    
-    Args:
-        file: Image file upload (multipart/form-data)
-        
-    Returns:
-        DetectionResponse with list of detections
-        
-    Raises:
-        400: Bad Request - No file uploaded or empty file
-        415: Unsupported Media Type - Invalid image format
-        500: Internal Server Error - Model inference failure
-    """
-    logger.info(f"POST /detect - Processing image: {file.filename}")
-    
-    # Validate file was uploaded
-    if not file:
-        logger.warning("No file uploaded")
-        raise HTTPException(
-            status_code=400,
-            detail="No file uploaded",
-        )
-    
-    # Validate file extension
-    if not utils.validate_file_extension(file.filename):
-        logger.warning(f"Invalid file extension: {file.filename}")
-        raise HTTPException(
-            status_code=415,
-            detail=f"Invalid file type. Allowed types: {', '.join(utils.ALLOWED_EXTENSIONS)}",
-        )
-    
-    temp_file_path = None
-    
-    try:
-        # Read uploaded file
-        file_content = await file.read()
-        
-        # Validate file size
-        if not utils.validate_file_size(len(file_content)):
-            logger.warning(f"File size too large: {len(file_content)} bytes")
-            raise HTTPException(
-                status_code=400,
-                detail="File size exceeds maximum limit (10MB)",
-            )
-        
-        # Save uploaded file temporarily
-        unique_filename, temp_file_path = utils.save_uploaded_file(
-            file_content, file.filename
-        )
-        logger.info(f"Saved temporary file: {temp_file_path}")
-        
-        # Run inference
-        detections_list = detector.detect(str(temp_file_path))
-        
-        # Convert to response model
-        detections = [
-            Detection(
-                class_id=d["class_id"],
-                class_name=d["class_name"],
-                confidence=d["confidence"],
-                bbox=d["bbox"],
-                recommendation=d["recommendation"],
-            )
-            for d in detections_list
-        ]
-        
-        logger.info(f"Returning {len(detections)} detections")
-        return DetectionResponse(detections=detections)
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except ValueError as e:
-        # Handle file validation errors
-        logger.error(f"File validation error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e),
-        )
-    except RuntimeError as e:
-        # Handle inference errors
-        logger.error(f"Inference error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error processing image",
-        )
-    except Exception as e:
-        # Handle unexpected errors
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error",
-        )
-    finally:
-        # Always clean up temporary file
-        if temp_file_path:
-            utils.delete_file(temp_file_path)
 
 
 @app.exception_handler(Exception)
@@ -223,6 +127,9 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"detail": "Internal server error"},
     )
+
+
+# All route handlers are implemented in `app.routes` and registered above.
 
 
 if __name__ == "__main__":
