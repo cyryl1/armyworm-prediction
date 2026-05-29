@@ -12,7 +12,7 @@ export default function App() {
     return localStorage.getItem('apiUrl') || 'http://localhost:8000';
   });
   const [apiKey, setApiKey] = useState<string>(() => {
-    return localStorage.getItem('apiKey') || '';
+    return localStorage.getItem('apiKey') || 'Praise2020';
   });
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');

@@ -188,27 +188,20 @@ async def websocket_stream(websocket: WebSocket):
 
     try:
         while True:
-            msg = await websocket.receive()
-            if msg.get("type") == "websocket.receive":
-                data = msg.get("bytes") or msg.get("text")
-                if data is None:
-                    continue
-                if isinstance(data, (bytes, bytearray)):
-                    last_frame = bytes(data)
-                else:
-                    text = data
+            data = await websocket.receive_text()
+            if data:
+                try:
+                    # Try to parse as JSON with base64 frame
+                    parsed = json.loads(data)
+                    frame_b64 = parsed.get("frame")
+                    if frame_b64:
+                        last_frame = base64.b64decode(frame_b64)
+                except Exception:
                     try:
-                        last_frame = base64.b64decode(text)
+                        # Try as raw base64
+                        last_frame = base64.b64decode(data)
                     except Exception:
-                        try:
-                            parsed = json.loads(text)
-                            frame_b64 = parsed.get("frame")
-                            if frame_b64:
-                                last_frame = base64.b64decode(frame_b64)
-                        except Exception:
-                            logger.debug("Received unparseable text frame on websocket stream")
-            elif msg.get("type") == "websocket.disconnect":
-                break
+                        logger.debug("Received unparseable text frame on websocket stream")
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     finally:
