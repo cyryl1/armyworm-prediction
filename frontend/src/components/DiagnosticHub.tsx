@@ -82,6 +82,7 @@ export default function DiagnosticHub({ apiUrl, apiKey, checkServerHealth }: Dia
   // API Call to FastAPI
   const analyzeCropImage = async (file: File) => {
     setIsAnalyzing(true);
+    console.log(`🔍 Diagnostic: Analyzing image "${file.name}" with API key: ${apiKey ? 'present' : 'missing'}`);
     
     const formData = new FormData();
     formData.append('file', file);
@@ -96,14 +97,19 @@ export default function DiagnosticHub({ apiUrl, apiKey, checkServerHealth }: Dia
         },
       });
 
+      console.log(`📡 Response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || 'Server returned a processing error.');
+        console.error(`❌ API Error (${response.status}):`, errorText);
+        throw new Error(`Server error (${response.status}): ${errorText || 'Unknown error'}`);
       }
 
       const data: DetectionResponse = await response.json();
+      console.log(`✅ Diagnostic complete:`, data);
       setResult(data);
     } catch (error: any) {
+      console.error('🚨 Diagnostic failed:', error);
       alert(`Diagnostic Failed: ${error?.message || 'Check your server connection & settings.'}`);
       setSelectedImage(null);
     } finally {
