@@ -333,7 +333,16 @@ export default function DiagnosticHub({ apiUrl, apiKey, checkServerHealth }: Dia
                       <div className="reco-box">
                         <div className="reco-label">Management Recommendation:</div>
                         <div className="reco-text">{d.recommendation}</div>
-                        {d.recommendation_details && (
+                        {d.recommendation_details && typeof d.recommendation_details === 'object' && (
+                          <div className="reco-details">
+                            {Object.entries(d.recommendation_details).map(([key, value]) => (
+                              <div key={key} style={{ marginTop: '8px', fontSize: '14px' }}>
+                                <strong>{key.replace(/_/g, ' ')}:</strong> {String(value)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {d.recommendation_details && typeof d.recommendation_details === 'string' && (
                           <div className="reco-details">{d.recommendation_details}</div>
                         )}
                       </div>
