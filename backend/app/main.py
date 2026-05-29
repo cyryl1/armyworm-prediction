@@ -7,6 +7,7 @@ pest detection, health checks, and class information retrieval.
 
 import logging
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -31,6 +32,16 @@ app = FastAPI(
     description="YOLOv8-based pest detection system for fall armyworms and maize diseases",
     version="1.0.0",
 )
+
+# Add CORS Middleware to support web frontend queries
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 def custom_openapi():
