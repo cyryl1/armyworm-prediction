@@ -214,8 +214,24 @@ def extract_gps_from_exif(image_path: Path) -> Tuple[Optional[float], Optional[f
         return None, None
 
 
+_CLASS_COLORS: dict[str, tuple[int, int, int]] = {
+    "fall-armyworm-egg": (0, 180, 255),       # orange (BGR)
+    "fall-armyworm-frass": (0, 140, 220),      # dark orange
+    "fall-armyworm-larva": (60, 60, 255),      # red
+    "fall-armyworm-larval-damage": (0, 165, 255),  # orange
+    "healthy-maize": (80, 220, 80),            # green
+    "maize-streak-disease": (200, 80, 180),    # purple
+}
+
+_DEFAULT_COLOR = (0, 200, 200)  # yellow fallback
+
+
 def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
     """Draw bounding boxes and labels on an image array (in-place).
+
+    Uses class-specific colours. Boxes that cover >90% of the image area
+    are treated as whole-image classifications — a label banner is drawn
+    at the top instead of a full rectangle, so the image stays clean.
 
     Args:
         image: BGR image as a numpy array.
@@ -224,20 +240,94 @@ def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
     Returns:
         The same image array with annotations drawn.
     """
+    img_h, img_w = image.shape[:2]
+    img_area = img_h * img_w
+    banner_offset = 0  # stacks banners if multiple full-image detections
+
     for detection in detections:
-        x1, y1, x2, y2 = [int(round(coord)) for coord in detection.get("bbox", [])]
-        label = f"{detection.get('class_name', 'object')} {detection.get('confidence', 0):.2f}"
-        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(
-            image,
-            label,
-            (x1, max(y1 - 10, 20)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2,
-            cv2.LINE_AA,
-        )
+        bbox = detection.get("bbox", [])
+        if len(bbox) != 4:
+            continue
+
+        x1, y1, x2, y2 = [int(round(coord)) for coord in bbox]
+
+        # Clamp to image bounds
+        x1 = max(0, min(x1, img_w - 1))
+        y1 = max(0, min(y1, img_h - 1))
+        x2 = max(0, min(x2, img_w - 1))
+        y2 = max(0, min(y2, img_h - 1))
+
+        class_name = detection.get("class_name", "object")
+        confidence = detection.get("confidence", 0)
+        color = _CLASS_COLORS.get(class_name, _DEFAULT_COLOR)
+        label = f"{class_name.replace('-', ' ').title()}  {confidence:.0%}"
+
+        box_area = abs(x2 - x1) * abs(y2 - y1)
+
+        if img_area > 0 and box_area / img_area > 0.90:
+            # Full-image classification → draw a label banner at the top
+            font_scale = max(0.5, min(img_w / 800, 1.2))
+            thickness = max(1, int(font_scale * 2))
+            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            bar_h = th + baseline + 20
+            y_pos = banner_offset
+
+            # Semi-transparent banner background
+            overlay = image.copy()
+            cv2.rectangle(overlay, (0, y_pos), (img_w, y_pos + bar_h), color, -1)
+            cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
+
+            # White text on banner
+            cv2.putText(
+                image, label,
+                (10, y_pos + th + 10),
+                cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                (255, 255, 255), thickness, cv2.LINE_AA,
+            )
+            banner_offset += bar_h + 4
+        else:
+            # Normal tight bounding box around the detection
+            line_thickness = max(2, int(min(img_w, img_h) / 300))
+
+            # Draw box
+            cv2.rectangle(image, (x1, y1), (x2, y2), color, line_thickness)
+
+            # Draw corner accents for a cleaner look
+            corner_len = max(10, int(min(abs(x2 - x1), abs(y2 - y1)) * 0.15))
+            ct = line_thickness + 1
+            # Top-left
+            cv2.line(image, (x1, y1), (x1 + corner_len, y1), color, ct)
+            cv2.line(image, (x1, y1), (x1, y1 + corner_len), color, ct)
+            # Top-right
+            cv2.line(image, (x2, y1), (x2 - corner_len, y1), color, ct)
+            cv2.line(image, (x2, y1), (x2, y1 + corner_len), color, ct)
+            # Bottom-left
+            cv2.line(image, (x1, y2), (x1 + corner_len, y2), color, ct)
+            cv2.line(image, (x1, y2), (x1, y2 - corner_len), color, ct)
+            # Bottom-right
+            cv2.line(image, (x2, y2), (x2 - corner_len, y2), color, ct)
+            cv2.line(image, (x2, y2), (x2, y2 - corner_len), color, ct)
+
+            # Label with filled background
+            font_scale = max(0.4, min(img_w / 1000, 0.8))
+            thickness = max(1, int(font_scale * 2))
+            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            label_y = max(y1 - 6, th + 10)
+            label_x = x1
+
+            # Background rectangle for label
+            overlay = image.copy()
+            cv2.rectangle(overlay, (label_x, label_y - th - 6), (label_x + tw + 10, label_y + 4), color, -1)
+            cv2.addWeighted(overlay, 0.75, image, 0.25, 0, image)
+
+            # White text
+            cv2.putText(
+                image, label,
+                (label_x + 5, label_y - 2),
+                cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                (255, 255, 255), thickness, cv2.LINE_AA,
+            )
+
     return image
 
 

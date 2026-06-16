@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from app import detector, utils
-from app import history_store
 from app.routes import router as api_router
 
 # Configure logging
@@ -53,23 +52,6 @@ def custom_openapi():
         description=app.description,
         routes=app.routes,
     )
-
-    # Add API key security schema for x-api-key header
-    components = openapi_schema.setdefault("components", {})
-    security_schemes = components.setdefault("securitySchemes", {})
-    security_schemes["ApiKeyAuth"] = {
-        "type": "apiKey",
-        "in": "header",
-        "name": "x-api-key",
-    }
-
-    # Mark protected endpoints with the security requirement so Swagger shows them
-    paths = openapi_schema.get("paths", {})
-    for p in ["/detect", "/history"]:
-        if p in paths:
-            for method in paths[p].keys():
-                paths[p][method]["security"] = [{"ApiKeyAuth": []}]
-
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
@@ -91,12 +73,6 @@ async def startup_event():
     
     # Initialize temp directory
     utils.init_temp_directory()
-    try:
-        await history_store.init_db()
-        logger.info("MongoDB initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize MongoDB at startup: {e}")
-        logger.warning("Continuing without history persistence; history endpoints may be unavailable")
     
     # Load model at startup (do not crash the app if model fails to load)
     try:
@@ -117,7 +93,6 @@ async def shutdown_event():
     """
     logger.info("Shutting down Pest Detection API...")
     utils.cleanup_temp_directory()
-
 
 
 

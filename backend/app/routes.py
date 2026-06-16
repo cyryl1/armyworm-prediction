@@ -17,10 +17,10 @@ import json
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
 
-from app import detector, utils, history_store, auth
-from app.schemas import DetectionResponse, Detection, ClassesResponse, HealthResponse, HistoryResponse
+from app import detector, utils
+from app.schemas import DetectionResponse, Detection, ClassesResponse, HealthResponse
 
 import logging
 
@@ -50,7 +50,7 @@ async def get_classes():
 
 
 @router.post("/detect", response_model=DetectionResponse, tags=["Detection"])
-async def detect_pests(file: UploadFile = File(...), _api_key: str = Depends(auth.api_key_header)):
+async def detect_pests(file: UploadFile = File(...)):
     logger.info(f"POST /detect - Processing image: {file.filename}")
 
     if not file:
@@ -97,9 +97,6 @@ async def detect_pests(file: UploadFile = File(...), _api_key: str = Depends(aut
             for d in detections_list
         ]
 
-        for detection in detections:
-            await history_store.save_detection(detection.model_dump())
-
         logger.info(f"Returning {len(detections)} detections")
         return DetectionResponse(
             detections=detections,
@@ -124,10 +121,7 @@ async def detect_pests(file: UploadFile = File(...), _api_key: str = Depends(aut
 
 @router.websocket("/detect/stream")
 async def websocket_stream(websocket: WebSocket):
-    # Accept then validate API key for WS connections (query param or header)
     await websocket.accept()
-    if not await auth.verify_ws_api_key(websocket):
-        return
     throttle_sec = float(os.getenv("STREAM_THROTTLE_SECONDS", "1.0"))
     last_processed = 0.0
     last_frame: bytes | None = None
@@ -211,10 +205,3 @@ async def websocket_stream(websocket: WebSocket):
             await processor_task
         except Exception:
             pass
-
-
-@router.get("/history", response_model=HistoryResponse, tags=["History"])
-async def get_history(limit: int = 100, _api_key: str = Depends(auth.api_key_header)):
-    logger.info("GET /history - Retrieving detection history")
-    records = await history_store.list_detections(limit=limit)
-    return HistoryResponse(records=records)

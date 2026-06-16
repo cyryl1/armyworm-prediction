@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Maize Guard | Live Stream Analyzer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .status-glow-green {
+            filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
+        }
+        .status-glow-red {
+            filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+        }
+        .status-glow-cyan {
+            filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.6));
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .animate-blink {
+            animation: blink 1.5s infinite;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed": "#6ffbbe",
+                      "on-primary": "#003824",
+                      "error": "#ffb4ab",
+                      "on-secondary-fixed-variant": "#004e5c",
+                      "on-tertiary-container": "#711419",
+                      "on-primary-fixed-variant": "#005236",
+                      "primary-fixed-dim": "#4edea3",
+                      "tertiary-fixed-dim": "#ffb3af",
+                      "on-secondary-fixed": "#001f26",
+                      "inverse-primary": "#006c49",
+                      "surface-tint": "#4edea3",
+                      "surface-container-lowest": "#09100c",
+                      "outline-variant": "#3c4a42",
+                      "error-container": "#93000a",
+                      "tertiary-fixed": "#ffdad7",
+                      "secondary-fixed-dim": "#4cd7f6",
+                      "on-tertiary": "#650911",
+                      "on-error-container": "#ffdad6",
+                      "secondary": "#4cd7f6",
+                      "on-tertiary-fixed": "#410005",
+                      "on-secondary": "#003640",
+                      "inverse-on-surface": "#2b322d",
+                      "surface-variant": "#2f3632",
+                      "on-surface-variant": "#bbcabf",
+                      "surface-container-highest": "#2f3632",
+                      "on-secondary-container": "#00424e",
+                      "tertiary-container": "#fc7c78",
+                      "surface": "#0e1511",
+                      "primary-container": "#10b981",
+                      "on-surface": "#dde4dd",
+                      "on-tertiary-fixed-variant": "#842225",
+                      "tertiary": "#ffb3af",
+                      "surface-container": "#1a211d",
+                      "background": "#0e1511",
+                      "on-primary-fixed": "#002113",
+                      "surface-container-high": "#242c27",
+                      "secondary-fixed": "#acedff",
+                      "surface-bright": "#343b36",
+                      "inverse-surface": "#dde4dd",
+                      "surface-container-low": "#161d19",
+                      "secondary-container": "#03b5d3",
+                      "on-primary-container": "#00422b",
+                      "surface-dim": "#0e1511",
+                      "outline": "#86948a",
+                      "on-error": "#690005",
+                      "on-background": "#dde4dd",
+                      "primary": "#4edea3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "4px",
+                      "xl": "40px",
+                      "sidebar-width": "280px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "md": "16px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "24px",
+                      "xs": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "body-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "label-sm": ["JetBrains Mono"],
+                      "body-lg": ["Inter"],
+                      "label-md": ["JetBrains Mono"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background selection:bg-primary/30">
+<!-- Sidebar Shell -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width bg-white/5 dark:bg-white/5 backdrop-blur-md border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col py-lg z-50">
+<div class="px-md mb-xl">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary tracking-tighter">Maize Guard</h1>
+<p class="font-body-md text-on-surface-variant opacity-70">Elite Bio-Defense</p>
+</div>
+<nav class="flex-1 space-y-xs">
+<a class="flex items-center gap-md py-sm px-md text-on-surface-variant hover:text-on-surface transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md">Diagnostic Hub</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md text-primary bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-primary transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined">video_settings</span>
+<span class="font-body-md">Live Stream Analyzer</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md text-on-surface-variant hover:text-on-surface transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined">history_edu</span>
+<span class="font-body-md">History &amp; Reports</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md text-on-surface-variant hover:text-on-surface transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined">settings_suggest</span>
+<span class="font-body-md">System Settings</span>
+</a>
+</nav>
+<div class="mt-auto px-md space-y-xs pt-lg border-t border-white/10">
+<a class="flex items-center gap-md py-sm px-md text-on-surface-variant hover:text-on-surface transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined">support_agent</span>
+<span class="font-body-md">Support</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md text-on-surface-variant hover:text-on-surface transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Top Navigation -->
+<header class="fixed top-0 right-0 w-[calc(100%-280px)] h-16 bg-white/5 dark:bg-white/5 backdrop-blur-md border-b border-white/10 flex justify-between items-center px-lg z-40">
+<div class="flex items-center gap-lg">
+<span class="font-headline-md text-headline-md font-bold text-primary">Command Center</span>
+<div class="h-6 w-px bg-white/10"></div>
+<div class="flex items-center gap-md" id="connection-metrics">
+<div class="flex items-center gap-sm">
+<div class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.5)]"></div>
+<span class="font-label-md text-label-md text-primary">API: Operational</span>
+</div>
+<div class="flex items-center gap-sm">
+<div class="w-2 h-2 rounded-full bg-cyan-400 status-glow-cyan animate-pulse"></div>
+<span class="font-label-md text-label-md text-secondary">Socket: <span id="socket-status">Connected</span></span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200">
+<span class="material-symbols-outlined">wifi_tethering</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container overflow-hidden border border-primary/20">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDLoxICfK1kwLqUw-_Dk4vwQtIfMcPooaHDcN0ZrKilcY586pt1ZvjTip-SEktI74T_INnT45KKIdXHRTB6VeJU-4WcVq-r3DRQjDbcWXvYDpEUahBDWnxHwKUOF08PDWZrhGef2ElA13vNRGNka8eqrBnrCk35MR5GA5Msq7hYH-ZXEkOrN62xfPHs2bJo74EaqV8BC4cXbcX5gx61FqlSe59zBuOYN4YBJhn4Hla57cUVfI8r6AGAF0vuIw0-G3KrP_LS1bMd5o"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-[280px] pt-16 min-h-screen flex">
+<!-- Center Viewport -->
+<section class="flex-1 p-lg flex flex-col gap-lg">
+<div class="relative w-full aspect-video glass-panel rounded-xl overflow-hidden group" id="stream-container">
+<!-- Video Stream Background -->
+<img alt="Live Maize Field" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIFAgoIYt6FxecutSfDvxO1CRcDAwYeR_FlcKSBOi4PwCiBO3RG2gZ68Sb3trM827sBJUiQlUROPwtexkH81cI2ADwSxgSk8En71kCCoHEjYQSBqeL9DwaVCk_ENveoMzz-Di_qRD7UZ1smLExn7rpY8h4mGzI8p6WpJzFVzTSxbF5DGhA9-l6zr6ylgMJht2-H4Jh5Eyr29D22xL5cF8TJ4AfOnmhugFQc_xUKo_XfrjfazVcXuyDFJcXWesT2mNwP3DXpU3v8_s"/>
+<!-- Canvas Overlay for YOLO Bounding Boxes -->
+<canvas class="absolute inset-0 w-full h-full pointer-events-none" id="yolo-canvas"></canvas>
+<!-- Live Indicator & Meta -->
+<div class="absolute top-md left-md flex items-center gap-md">
+<div class="flex items-center gap-sm bg-surface-container-highest/60 backdrop-blur-md px-md py-xs rounded-full border border-white/10">
+<span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-blink status-glow-red"></span>
+<span class="font-label-md text-white font-bold tracking-widest">LIVE</span>
+</div>
+<div class="bg-surface-container-highest/60 backdrop-blur-md px-md py-xs rounded-full border border-white/10">
+<span class="font-label-md text-on-surface-variant">CAM_UNIT: SE_04</span>
+</div>
+</div>
+<!-- Stream Controls (Overlay) -->
+<div class="absolute bottom-md left-1/2 -translate-x-1/2 flex items-center gap-md opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+<button class="p-sm glass-panel rounded-full hover:bg-primary/20 text-white">
+<span class="material-symbols-outlined">pause</span>
+</button>
+<button class="p-sm glass-panel rounded-full hover:bg-primary/20 text-white">
+<span class="material-symbols-outlined">videocam_off</span>
+</button>
+<button class="p-sm glass-panel rounded-full hover:bg-primary/20 text-white">
+<span class="material-symbols-outlined">fullscreen</span>
+</button>
+</div>
+</div>
+<!-- Metrics Bar -->
+<div class="grid grid-cols-4 gap-gutter">
+<div class="glass-panel p-md rounded-lg flex flex-col gap-xs">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Latency</span>
+<div class="flex items-end gap-sm">
+<span class="font-headline-md text-primary" id="latency-val">24.2 ms</span>
+<span class="text-primary-fixed-dim text-[10px] mb-1" id="latency-trend">▼ 0.3</span>
+</div>
+</div>
+<div class="glass-panel p-md rounded-lg flex flex-col gap-xs">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Throughput</span>
+<div class="flex items-end gap-sm">
+<span class="font-headline-md text-secondary">8.4 Mb/s</span>
+</div>
+</div>
+<div class="glass-panel p-md rounded-lg flex flex-col gap-xs">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Frame Rate</span>
+<div class="flex items-end gap-sm">
+<span class="font-headline-md text-on-surface">60 FPS</span>
+</div>
+</div>
+<div class="glass-panel p-md rounded-lg flex flex-col gap-xs border-l-4 border-primary/40">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-widest">Buffer Health</span>
+<div class="w-full bg-white/5 h-1.5 rounded-full mt-2">
+<div class="bg-primary h-full w-[92%] rounded-full shadow-[0_0_8px_rgba(78,222,163,0.3)]"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Detections Log -->
+<aside class="w-[380px] p-lg border-l border-white/10 bg-white/[0.02] flex flex-col gap-md">
+<div class="flex justify-between items-center mb-sm">
+<h2 class="font-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary">database</span>
+                Live Log
+            </h2>
+<span class="font-label-sm px-sm py-0.5 glass-panel rounded text-primary border-primary/20">Auto-scroll: ON</span>
+</div>
+<div class="flex-1 overflow-y-auto pr-sm space-y-md" id="detection-log">
+<!-- Initial content will be added by JS -->
+</div>
+<!-- Export Actions -->
+<div class="mt-auto grid grid-cols-2 gap-sm pt-md border-t border-white/10">
+<button class="flex items-center justify-center gap-sm py-sm glass-panel rounded hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+<span class="font-label-md">Export Log</span>
+</button>
+<button class="flex items-center justify-center gap-sm py-sm bg-primary text-on-primary rounded hover:brightness-110 transition-all font-bold">
+<span class="material-symbols-outlined text-sm">priority_high</span>
+<span class="font-label-md">Flag Event</span>
+</button>
+</div>
+</aside>
+</main>
+<script>
+    const canvas = document.getElementById('yolo-canvas');
+    const ctx = canvas.getContext('2d');
+    const logContainer = document.getElementById('detection-log');
+    const latencyVal = document.getElementById('latency-val');
+    const latencyTrend = document.getElementById('latency-trend');
+
+    const DETECTION_TYPES = [
+        { label: 'MAIZE STREAK VIRUS', color: '#06b6d4', accent: 'secondary', text: 'Chlorotic streak pattern identified.', severity: 'High' },
+        { label: 'CLEAN SAMPLE', color: '#4edea3', accent: 'primary', text: 'Healthy leaf segment confirmed.', severity: 'N/A' },
+        { label: 'PHYSICAL DAMAGE', color: '#f97316', accent: 'tertiary-container', text: 'Tear detected in upper canopy.', severity: 'Low' }
+    ];
+
+    function resizeCanvas() {
+        const container = document.getElementById('stream-container');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawBox(x, y, w, h, label, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+        
+        ctx.fillStyle = color;
+        ctx.font = 'bold 10px JetBrains Mono';
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillRect(x, y - 18, textWidth + 10, 18);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, x + 5, y - 5);
+        
+        // Add subtle glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = color;
+        ctx.strokeRect(x, y, w, h);
+        ctx.shadowBlur = 0;
+    }
+
+    let activeBoxes = [];
+
+    function updateSimulation() {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Update boxes
+        if (Math.random() > 0.8) {
+            const type = DETECTION_TYPES[Math.floor(Math.random() * DETECTION_TYPES.length)];
+            const w = 100 + Math.random() * 100;
+            const h = 100 + Math.random() * 100;
+            activeBoxes.push({
+                x: Math.random() * (canvas.width - w),
+                y: Math.random() * (canvas.height - h),
+                w: w,
+                h: h,
+                label: `${type.label} [${Math.floor(80 + Math.random() * 19)}%]`,
+                color: type.color,
+                life: 60 // frames
+            });
+            
+            if (type.label !== 'CLEAN SAMPLE') {
+                addLogEntry(type);
+            }
+        }
+
+        activeBoxes = activeBoxes.filter(box => {
+            box.life--;
+            if (box.life > 0) {
+                drawBox(box.x, box.y, box.w, box.h, box.label, box.color);
+                return true;
+            }
+            return false;
+        });
+
+        // Update latency
+        if (Math.random() > 0.9) {
+            const current = parseFloat(latencyVal.innerText);
+            const delta = (Math.random() - 0.5) * 2;
+            const newVal = Math.max(15, Math.min(45, current + delta)).toFixed(1);
+            latencyVal.innerText = `${newVal} ms`;
+            latencyTrend.innerText = delta > 0 ? `▲ ${delta.toFixed(1)}` : `▼ ${Math.abs(delta).toFixed(1)}`;
+            latencyTrend.className = delta > 0 ? "text-error text-[10px] mb-1" : "text-primary-fixed-dim text-[10px] mb-1";
+        }
+
+        requestAnimationFrame(updateSimulation);
+    }
+
+    function addLogEntry(type) {
+        const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        const grid = `Grid ${Math.floor(Math.random() * 10)}-${String.fromCharCode(65 + Math.floor(Math.random() * 6))}`;
+        
+        const entry = document.createElement('div');
+        const borderColorClass = type.accent === 'secondary' ? 'border-secondary/60' : (type.accent === 'primary' ? 'border-primary/60' : 'border-tertiary-container/60');
+        const textColorClass = type.accent === 'secondary' ? 'text-secondary' : (type.accent === 'primary' ? 'text-primary' : 'text-tertiary-container');
+        
+        entry.className = `p-md glass-panel rounded-lg border-l-4 ${borderColorClass} animate-in fade-in slide-in-from-right-4 duration-500`;
+        entry.innerHTML = `
+            <div class="flex justify-between items-start mb-xs">
+                <span class="font-label-sm ${textColorClass} font-bold">${type.label}</span>
+                <span class="font-label-sm text-on-surface-variant">${time}</span>
+            </div>
+            <p class="font-body-md text-sm text-on-surface">${type.text}</p>
+            <div class="mt-sm flex items-center gap-sm">
+                <span class="material-symbols-outlined text-xs text-on-surface-variant">location_on</span>
+                <span class="font-label-sm text-on-surface-variant italic">Region: ${grid}</span>
+            </div>
+        `;
+        
+        logContainer.prepend(entry);
+        if (logContainer.children.length > 10) {
+            logContainer.removeChild(logContainer.lastChild);
+        }
+    }
+
+    // Initial logs
+    DETECTION_TYPES.forEach(t => {
+        if(t.label !== 'CLEAN SAMPLE') addLogEntry(t);
+    });
+
+    updateSimulation();
+</script>
+</body></html>
