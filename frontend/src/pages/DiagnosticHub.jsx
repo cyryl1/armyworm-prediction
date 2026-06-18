@@ -51,7 +51,7 @@ export default function DiagnosticHub() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const endpoint = localStorage.getItem('apiEndpoint') || 'http://localhost:8000';
+    const endpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
 
     try {
       const res = await fetch(`${endpoint}/detect`, {

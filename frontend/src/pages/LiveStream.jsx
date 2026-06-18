@@ -73,7 +73,7 @@ export default function LiveStream() {
   }, []);
 
   const connectWebSocket = useCallback(() => {
-    const endpoint = localStorage.getItem('apiEndpoint') || 'http://localhost:8000';
+    const endpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
     const wsUrl = endpoint.replace(/^http/, 'ws') + '/detect/stream';
 
     wsRef.current = new WebSocket(wsUrl);
