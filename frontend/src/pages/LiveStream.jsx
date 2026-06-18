@@ -8,12 +8,20 @@ const SEVERITY_COLORS = {
   unknown: '[#a78bfa]',
 };
 
+const CONTROL_ICONS = {
+  cultural_control:   { icon: 'agriculture',   label: 'Cultural Control' },
+  biological_control: { icon: 'bug_report',     label: 'Biological Control' },
+  chemical_control:   { icon: 'science',        label: 'Chemical Control' },
+  prevention:         { icon: 'shield',         label: 'Prevention' },
+};
+
 export default function LiveStream() {
   const videoRef = useRef(null);
   const [previewSrc, setPreviewSrc] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState(null);
 
   const [stats, setStats] = useState({ latency: '--', throughput: '--', fps: '--' });
   const wsRef = useRef(null);
@@ -42,7 +50,7 @@ export default function LiveStream() {
       severity: severity,
       confidence: (detection.confidence * 100).toFixed(1),
       recommendation: detection.recommendation || '',
-      culturalTip: details.cultural_control?.[0] || '',
+      details: details,
     };
 
     setLogs(prev => [newLog, ...prev].slice(0, 30));
@@ -228,25 +236,72 @@ export default function LiveStream() {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-sm space-y-sm">
-          {logs.map(log => (
+          {logs.map(log => {
+            const isExpanded = expandedLogId === log.id;
+            return (
             <div key={log.id} className={`p-md glass-panel rounded-lg border-l-4 border-${log.color}/60 transition-all duration-300`}>
-              <div className="flex justify-between items-start mb-xs">
-                <span className={`font-label-sm font-bold text-${log.color} text-xs`}>{log.displayName}</span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant text-[10px]">{log.time}</span>
-              </div>
-              <div className="flex items-center gap-sm mb-xs">
-                <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden">
-                  <div className={`h-full bg-${log.color} rounded-full`} style={{ width: `${log.confidence}%` }}></div>
+              <button 
+                className="w-full flex flex-col items-start text-left"
+                onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+              >
+                <div className="w-full flex justify-between items-start mb-xs">
+                  <span className={`font-label-sm font-bold text-${log.color} text-xs`}>{log.displayName}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-label-sm text-label-sm text-on-surface-variant text-[10px]">{log.time}</span>
+                    <span className={`material-symbols-outlined text-xs text-on-surface-variant transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-on-surface-variant">{log.confidence}%</span>
-              </div>
-              {log.culturalTip && (
-                <p className="text-[10px] text-on-surface/60 leading-relaxed mt-xs">
-                  <span className="text-primary">→</span> {log.culturalTip}
-                </p>
+                <div className="w-full flex items-center gap-sm mb-xs">
+                  <div className="flex-1 bg-white/10 h-1 rounded-full overflow-hidden">
+                    <div className={`h-full bg-${log.color} rounded-full`} style={{ width: `${log.confidence}%` }}></div>
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant shrink-0">{log.confidence}%</span>
+                </div>
+              </button>
+
+              {isExpanded ? (
+                <div className="mt-sm pt-sm border-t border-white/10 space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <p className="text-xs text-on-surface/80 leading-relaxed mb-2">{log.recommendation}</p>
+                  
+                  {log.details && Object.entries(CONTROL_ICONS).map(([key, config]) => {
+                    const items = log.details[key];
+                    if (!items || items.length === 0) return null;
+                    return (
+                      <div key={key} className="bg-white/5 rounded p-2">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="material-symbols-outlined text-[14px] text-primary">{config.icon}</span>
+                          <span className="text-[10px] font-bold text-on-surface uppercase tracking-wider">{config.label}</span>
+                        </div>
+                        <ul className="pl-1 space-y-1">
+                          {items.map((item, i) => (
+                            <li key={i} className="flex gap-1.5 text-[10px] text-on-surface/70 leading-relaxed">
+                              <span className="text-primary mt-[2px] shrink-0">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  
+                  {log.details?.region_advisory && (
+                    <div className="bg-secondary/10 border border-secondary/20 rounded p-2 mt-2">
+                       <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block mb-1">
+                         {log.details.region_advisory.region_name} Advisory
+                       </span>
+                       <p className="text-[10px] text-on-surface/70 leading-relaxed">{log.details.region_advisory.advisory}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                log.details?.cultural_control?.[0] && (
+                  <p className="text-[10px] text-on-surface/60 leading-relaxed mt-xs truncate w-full pointer-events-none">
+                    <span className="text-primary">→</span> {log.details.cultural_control[0]}
+                  </p>
+                )
               )}
             </div>
-          ))}
+          )})}
           {logs.length === 0 && (
             <div className="text-center text-on-surface-variant mt-10">
               <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 block mb-sm">monitor_heart</span>

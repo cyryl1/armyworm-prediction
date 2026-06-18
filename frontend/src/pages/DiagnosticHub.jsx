@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const SEVERITY_CONFIG = {
   none:    { color: 'bg-primary',    text: 'text-primary',    border: 'border-primary/30',    label: 'HEALTHY' },
@@ -22,7 +22,20 @@ export default function DiagnosticHub() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null);
   const [expandedSections, setExpandedSections] = useState({});
+  const [showTutorial, setShowTutorial] = useState(false);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const hasSeen = localStorage.getItem('hasSeenScannerTutorial');
+    if (!hasSeen) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const closeTutorial = () => {
+    localStorage.setItem('hasSeenScannerTutorial', 'true');
+    setShowTutorial(false);
+  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -87,7 +100,48 @@ export default function DiagnosticHub() {
   };
 
   return (
-    <div className="p-lg md:p-xl md:ml-sidebar-width flex flex-col lg:flex-row gap-xl max-w-[1600px] mx-auto">
+    <div className="p-lg md:p-xl md:ml-sidebar-width flex flex-col lg:flex-row gap-xl max-w-[1600px] mx-auto relative">
+      {/* Tutorial Modal */}
+      {showTutorial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#121212] border border-white/10 rounded-2xl max-w-md w-full p-xl shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="material-symbols-outlined text-primary text-3xl">info</span>
+              <h2 className="font-headline-md text-2xl font-bold text-on-surface">For Best Results</h2>
+            </div>
+            
+            <div className="space-y-6 mb-8">
+              <div className="flex gap-4 items-start">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary">check_circle</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-on-surface mb-1 text-lg">DO: Get Close</h3>
+                  <p className="text-on-surface-variant text-sm">Get very close (10-20 cm) to the damaged leaf or pest. The damage should fill the screen.</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-4 items-start">
+                <div className="w-12 h-12 rounded-full bg-error/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-error">cancel</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-on-surface mb-1 text-lg">DON'T: Take Wide Shots</h3>
+                  <p className="text-on-surface-variant text-sm">Do not take wide pictures of the whole farm or field. The AI cannot see tiny details from far away.</p>
+                </div>
+              </div>
+            </div>
+            
+            <button 
+              onClick={closeTutorial}
+              className="w-full py-3 px-4 bg-primary text-on-primary rounded-xl font-bold hover:bg-primary/90 transition-colors"
+            >
+              Got it, let's scan!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Upload & Preview Area */}
       <section className="flex-1 flex flex-col gap-md">
         <div className="mb-sm">
@@ -275,10 +329,11 @@ export default function DiagnosticHub() {
                 );
               })
             ) : (
-              <div className="glass-panel rounded-xl p-lg text-center">
-                <span className="material-symbols-outlined text-primary text-4xl mb-sm block">check_circle</span>
-                <p className="font-headline-md text-primary mb-xs">No Threats Detected</p>
-                <p className="text-on-surface-variant text-sm">The image appears clear. Continue routine scouting.</p>
+              <div className="glass-panel rounded-xl p-lg text-center border border-primary/20">
+                <span className="material-symbols-outlined text-primary text-4xl mb-sm block">search</span>
+                <p className="font-headline-md text-primary mb-xs">No Pests Detected</p>
+                <p className="text-on-surface-variant text-sm mb-4">Make sure you are standing very close to the plant (10-20cm) and the image is not blurry.</p>
+                <p className="text-on-surface-variant text-sm font-semibold">If your photo was a wide shot of the field, please try again closer! Otherwise, continue routine scouting.</p>
               </div>
             )}
           </div>

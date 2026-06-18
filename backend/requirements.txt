@@ -1,19 +1,17 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-ultralytics==8.0.205
-opencv-python==4.8.1.78
-pydantic==2.5.0
-Pillow==10.2.0
-pymongo==4.4.0
-motor==3.3.1
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+python-multipart
+pydantic>=2.9.0
+ultralytics>=8.0.205
+opencv-python>=4.8.1.78
+Pillow>=10.2.0
 python-dotenv==1.0.0
 
-# Auth
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==3.2.2
-python-multipart==0.0.63
-email-validator>=2.1.0
+# Database
+pymongo
+motor
+
+# Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.24.1
