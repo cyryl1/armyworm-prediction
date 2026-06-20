@@ -26,7 +26,7 @@ class Detection(BaseModel):
     class_id: int = Field(..., description="YOLO class ID")
     class_name: str = Field(..., description="Class name (pest/disease type)")
     confidence: float = Field(..., ge=0, le=1, description="Confidence score (0-1)")
-    bbox: List[float] = Field(..., description="Bounding box [x1, y1, x2, y2]")
+    bbox: List[float] = Field(..., description="Normalized bounding box [x1, y1, x2, y2] in 0-1 range (multiply by image width/height to get pixel coords)")
     recommendation: str = Field(..., description="Compact pest management recommendation")
     recommendation_details: Optional[dict] = Field(
         default=None,

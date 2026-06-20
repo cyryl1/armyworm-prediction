@@ -170,9 +170,11 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
     image = cv2.imread(str(image_path))
     if image is None:
         raise ValueError(f"Cannot read image file: {image_path}")
+
+    img_h, img_w = image.shape[:2]
     
     try:
-        logger.info(f"Running inference on image: {image_path}")
+        logger.info(f"Running inference on image: {image_path} (size: {img_w}x{img_h})")
         
         # Run YOLO inference
         results = _model.predict(image_path, conf=confidence_threshold, verbose=False)
@@ -185,7 +187,7 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
             boxes = result.boxes
             
             for i, box in enumerate(boxes):
-                # Get coordinates
+                # Get absolute pixel coordinates
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 
                 # Get class information
@@ -198,12 +200,23 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
                 # Get recommendation
                 recommendation = get_recommendation(class_name)
                 recommendation_details = get_recommendation_payload(class_name)
-                
+
+                # Normalize bbox to 0-1 range for the API response
+                # (frontend multiplies by display dimensions to render)
+                bbox_normalized = [
+                    x1 / img_w,
+                    y1 / img_h,
+                    x2 / img_w,
+                    y2 / img_h,
+                ]
+
                 detection = {
                     "class_id": class_id,
                     "class_name": class_name,
                     "confidence": confidence,
-                    "bbox": [x1, y1, x2, y2],
+                    "bbox": bbox_normalized,
+                    # Keep pixel coords for server-side annotation drawing
+                    "bbox_pixel": [x1, y1, x2, y2],
                     "recommendation": recommendation,
                     "recommendation_details": recommendation_details,
                 }
@@ -211,7 +224,9 @@ def detect(image_path: str, confidence_threshold: float = 0.5) -> List[Dict]:
                 detections.append(detection)
                 logger.info(
                     f"Detection: {class_name} ({confidence:.2%}) "
-                    f"at bbox [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}]"
+                    f"at bbox_pixel [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}] "
+                    f"normalized [{bbox_normalized[0]:.4f}, {bbox_normalized[1]:.4f}, "
+                    f"{bbox_normalized[2]:.4f}, {bbox_normalized[3]:.4f}]"
                 )
         
         logger.info(f"Found {len(detections)} detections")
@@ -242,7 +257,8 @@ def detect_batch(image_paths: List[str], confidence_threshold: float = 0.5) -> L
     if not image_paths:
         return []
         
-    # Verify all images exist and are readable
+    # Verify all images exist and are readable; cache dimensions
+    image_dims = []
     for path in image_paths:
         image_file = Path(path)
         if not image_file.exists():
@@ -250,6 +266,8 @@ def detect_batch(image_paths: List[str], confidence_threshold: float = 0.5) -> L
         image = cv2.imread(str(path))
         if image is None:
             raise ValueError(f"Cannot read image file: {path}")
+        img_h, img_w = image.shape[:2]
+        image_dims.append((img_w, img_h))
             
     try:
         logger.info(f"Running batch inference on {len(image_paths)} images")
@@ -263,6 +281,7 @@ def detect_batch(image_paths: List[str], confidence_threshold: float = 0.5) -> L
         for idx, result in enumerate(results):
             detections = []
             boxes = result.boxes
+            img_w, img_h = image_dims[idx]
             
             for box in boxes:
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
@@ -272,12 +291,20 @@ def detect_batch(image_paths: List[str], confidence_threshold: float = 0.5) -> L
                 
                 recommendation = get_recommendation(class_name)
                 recommendation_details = get_recommendation_payload(class_name)
+
+                bbox_normalized = [
+                    x1 / img_w,
+                    y1 / img_h,
+                    x2 / img_w,
+                    y2 / img_h,
+                ]
                 
                 detection = {
                     "class_id": class_id,
                     "class_name": class_name,
                     "confidence": confidence,
-                    "bbox": [x1, y1, x2, y2],
+                    "bbox": bbox_normalized,
+                    "bbox_pixel": [x1, y1, x2, y2],
                     "recommendation": recommendation,
                     "recommendation_details": recommendation_details,
                 }

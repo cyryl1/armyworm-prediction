@@ -245,7 +245,8 @@ def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
     banner_offset = 0  # stacks banners if multiple full-image detections
 
     for detection in detections:
-        bbox = detection.get("bbox", [])
+        # Use pixel coords for drawing; fall back to 'bbox' for compatibility
+        bbox = detection.get("bbox_pixel") or detection.get("bbox", [])
         if len(bbox) != 4:
             continue
 
@@ -264,27 +265,36 @@ def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
 
         box_area = abs(x2 - x1) * abs(y2 - y1)
 
-        if img_area > 0 and box_area / img_area > 0.90:
-            # Full-image classification → draw a label banner at the top
-            font_scale = max(0.5, min(img_w / 800, 1.2))
+        if box_area > 0.9 * img_area:
+            # Whole-image classification — draw a label banner at the top
+            # instead of a rectangle that covers the entire image.
+            font_scale = max(0.5, min(img_w / 800, 1.0))
             thickness = max(1, int(font_scale * 2))
-            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-            bar_h = th + baseline + 20
-            y_pos = banner_offset
-
-            # Semi-transparent banner background
-            overlay = image.copy()
-            cv2.rectangle(overlay, (0, y_pos), (img_w, y_pos + bar_h), color, -1)
-            cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
-
-            # White text on banner
-            cv2.putText(
-                image, label,
-                (10, y_pos + th + 10),
-                cv2.FONT_HERSHEY_SIMPLEX, font_scale,
-                (255, 255, 255), thickness, cv2.LINE_AA,
+            (tw, th), baseline = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
             )
-            banner_offset += bar_h + 4
+            banner_h = th + 16
+            banner_y = banner_offset
+            overlay = image.copy()
+            cv2.rectangle(
+                overlay,
+                (0, banner_y),
+                (img_w, banner_y + banner_h),
+                color,
+                -1,
+            )
+            cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
+            cv2.putText(
+                image,
+                label,
+                (10, banner_y + th + 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (255, 255, 255),
+                thickness,
+                cv2.LINE_AA,
+            )
+            banner_offset += banner_h + 4
         else:
             # Normal tight bounding box around the detection
             line_thickness = max(2, int(min(img_w, img_h) / 300))
