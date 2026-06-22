@@ -16,7 +16,9 @@ COPY requirements.txt .
 
 # Install Python dependencies
 # We use --no-cache-dir to reduce image size
+# Crucially, install CPU-only PyTorch first so ultralytics doesn't download the massive 2.5GB CUDA version
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
