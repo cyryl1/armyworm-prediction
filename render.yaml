@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: armyworm-prediction-backend
+    env: docker
+    region: ohio
+    plan: free
+    # Since the Dockerfile is inside the backend directory:
+    dockerContext: backend
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: PORT
+        value: 8000
