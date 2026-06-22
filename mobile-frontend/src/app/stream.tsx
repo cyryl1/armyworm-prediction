@@ -66,7 +66,7 @@ export default function StreamScreen() {
   const pickAndSend = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
         base64: true,
       } as any);
