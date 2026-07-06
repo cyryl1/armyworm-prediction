@@ -17,10 +17,13 @@ import json
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
 
-from app import detector, utils
-from app.schemas import DetectionResponse, Detection, ClassesResponse, HealthResponse
+from app import detector, utils, models
+from app.database import get_db
+from app.schemas import DetectionResponse, Detection, ClassesResponse, HealthResponse, ScoutingSessionCreate, ScoutingSession
+from app.recommendations import get_recommendation_details_async
 
 import logging
 
@@ -82,6 +85,17 @@ async def detect_pests(file: UploadFile = File(...)):
                 temp_file_path, detections_list
             )
 
+        # Async fetch live recommendations
+        for d in detections_list:
+            live_rec = await get_recommendation_details_async(
+                class_name=d["class_name"],
+                latitude=gps_latitude,
+                longitude=gps_longitude
+            )
+            d["recommendation_details"] = live_rec
+            d["data_source"] = live_rec.get("data_source", "offline")
+            d["recommendation_last_updated"] = live_rec.get("recommendation_last_updated")
+
         detections: List[Detection] = [
             Detection(
                 class_id=d["class_id"],
@@ -93,6 +107,8 @@ async def detect_pests(file: UploadFile = File(...)):
                 gps_latitude=gps_latitude,
                 gps_longitude=gps_longitude,
                 detection_timestamp=datetime.now(timezone.utc).isoformat(),
+                data_source=d.get("data_source", "offline"),
+                recommendation_last_updated=d.get("recommendation_last_updated")
             )
             for d in detections_list
         ]
@@ -129,6 +145,37 @@ async def websocket_stream(websocket: WebSocket):
 
     logger.info("WebSocket client connected for /detect/stream")
 
+    def _run_inference(frame_bytes: bytes):
+        """Run YOLO inference synchronously (called from executor)."""
+        temp_name = f"{uuid.uuid4().hex}_stream.jpg"
+        temp_path = utils.get_temp_file_path(temp_name)
+        try:
+            with open(temp_path, "wb") as f:
+                f.write(frame_bytes)
+
+            detections = detector.detect(str(temp_path))
+
+            # Generate annotated frame with bounding boxes
+            annotated_b64 = None
+            frame_image = cv2.imread(str(temp_path))
+            if frame_image is not None:
+                annotated_b64 = utils.annotate_image_array_to_base64(
+                    frame_image, detections
+                )
+
+            for d in detections:
+                d["detection_timestamp"] = datetime.now(timezone.utc).isoformat()
+
+            return {"detections": detections, "annotated_frame": annotated_b64}
+        finally:
+            try:
+                if temp_path.exists():
+                    utils.delete_file(temp_path)
+            except Exception:
+                pass
+
+    loop = asyncio.get_event_loop()
+
     async def processor():
         nonlocal last_frame, last_processed, stopped
         try:
@@ -140,39 +187,27 @@ async def websocket_stream(websocket: WebSocket):
                 if now - last_processed < throttle_sec:
                     continue
 
-                temp_name = f"{uuid.uuid4().hex}_stream.jpg"
-                temp_path = utils.get_temp_file_path(temp_name)
+                # Grab the frame and clear it so we don't re-process the same one
+                frame_to_process = last_frame
+                last_frame = None
+
                 try:
-                    with open(temp_path, "wb") as f:
-                        f.write(last_frame)
+                    # Run blocking inference in a thread to avoid stalling the event loop
+                    result = await loop.run_in_executor(None, _run_inference, frame_to_process)
 
-                    detections = detector.detect(str(temp_path))
+                    # Fetch live recommendations asynchronously
+                    for d in result["detections"]:
+                        live_rec = await get_recommendation_details_async(d["class_name"])
+                        d["recommendation_details"] = live_rec
+                        d["data_source"] = live_rec.get("data_source", "offline")
+                        d["recommendation_last_updated"] = live_rec.get("recommendation_last_updated")
 
-                    # Generate annotated frame with bounding boxes
-                    annotated_b64 = None
-                    frame_image = cv2.imread(str(temp_path))
-                    if frame_image is not None:
-                        annotated_b64 = utils.annotate_image_array_to_base64(
-                            frame_image, detections
-                        )
-
-                    for d in detections:
-                        d["detection_timestamp"] = datetime.now(timezone.utc).isoformat()
-                    await websocket.send_json({
-                        "detections": detections,
-                        "annotated_frame": annotated_b64,
-                    })
-                    last_processed = now
+                    await websocket.send_json(result)
+                    last_processed = time.time()
                 except Exception as e:
                     logger.error(f"Stream processing error: {e}")
                     try:
                         await websocket.send_json({"error": str(e)})
-                    except Exception:
-                        pass
-                finally:
-                    try:
-                        if temp_path.exists():
-                            utils.delete_file(temp_path)
                     except Exception:
                         pass
         except asyncio.CancelledError:
@@ -205,3 +240,31 @@ async def websocket_stream(websocket: WebSocket):
             await processor_task
         except Exception:
             pass
+
+@router.post("/scouting-sessions", response_model=ScoutingSession, tags=["Scouting"])
+async def create_scouting_session(session: ScoutingSessionCreate, db: Session = Depends(get_db)):
+    logger.info("POST /scouting-sessions - Saving new scouting session")
+    db_session = models.ScoutingSession(**session.model_dump())
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    
+    # Return string timestamp to match schema
+    db_session_dict = db_session.__dict__
+    db_session_dict["created_at"] = db_session.created_at.isoformat() if db_session.created_at else ""
+    return db_session_dict
+
+
+@router.get("/scouting-sessions", response_model=List[ScoutingSession], tags=["Scouting"])
+async def get_scouting_sessions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    logger.info("GET /scouting-sessions - Retrieving scouting sessions")
+    sessions = db.query(models.ScoutingSession).order_by(models.ScoutingSession.created_at.desc()).offset(skip).limit(limit).all()
+    
+    # Format dates
+    results = []
+    for s in sessions:
+        s_dict = s.__dict__
+        s_dict["created_at"] = s.created_at.isoformat() if s.created_at else ""
+        results.append(s_dict)
+        
+    return results

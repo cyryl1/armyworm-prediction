@@ -12,7 +12,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-from app import detector, utils
+from app import detector, utils, models, database
+from app.api_client import api_client
 from app.routes import router as api_router
 
 # Configure logging
@@ -74,6 +75,13 @@ async def startup_event():
     # Initialize temp directory
     utils.init_temp_directory()
     
+    # Initialize API client
+    api_client.init_client()
+    
+    # Initialize database tables
+    logger.info("Initializing database tables...")
+    models.Base.metadata.create_all(bind=database.engine)
+    
     # Load model at startup (do not crash the app if model fails to load)
     try:
         # Let detector decide device (defaults to CPU if CUDA unavailable)
@@ -93,6 +101,7 @@ async def shutdown_event():
     """
     logger.info("Shutting down Pest Detection API...")
     utils.cleanup_temp_directory()
+    await api_client.close()
 
 
 

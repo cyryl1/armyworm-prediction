@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 
 import DiagnosticHub from './pages/DiagnosticHub';
 import LiveStream from './pages/LiveStream';
+import ScoutingMode from './pages/ScoutingMode';
 
 export default function App() {
   const location = useLocation();
@@ -28,6 +29,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DiagnosticHub />} />
           <Route path="/stream" element={<LiveStream />} />
+          <Route path="/scout" element={<ScoutingMode />} />
         </Routes>
       </main>
 
@@ -44,6 +46,12 @@ export default function App() {
           icon="videocam"
           label="Live View"
           isActive={location.pathname === '/stream'}
+        />
+        <TabItem
+          to="/scout"
+          icon="explore"
+          label="Scouting"
+          isActive={location.pathname === '/scout'}
         />
       </nav>
     </div>

@@ -22,6 +22,8 @@ class Detection(BaseModel):
         gps_latitude: GPS latitude from image EXIF metadata
         gps_longitude: GPS longitude from image EXIF metadata
         detection_timestamp: UTC timestamp of detection
+        data_source: Source of recommendation data (live, cached, offline)
+        recommendation_last_updated: Timestamp of when recommendation was fetched
     """
     class_id: int = Field(..., description="YOLO class ID")
     class_name: str = Field(..., description="Class name (pest/disease type)")
@@ -35,7 +37,8 @@ class Detection(BaseModel):
     gps_latitude: Optional[float] = Field(default=None, description="GPS latitude from image metadata")
     gps_longitude: Optional[float] = Field(default=None, description="GPS longitude from image metadata")
     detection_timestamp: Optional[str] = Field(default=None, description="UTC timestamp of detection")
-
+    data_source: Optional[str] = Field(default="offline", description="Source of recommendation data ('live', 'cached', 'offline')")
+    recommendation_last_updated: Optional[str] = Field(default=None, description="ISO timestamp of when the live recommendation data was last fetched")
 
 class DetectionResponse(BaseModel):
     """API response for detection request.
@@ -71,3 +74,17 @@ class HealthResponse(BaseModel):
 
     status: str = Field(..., description="Health status")
     model_loaded: bool = Field(..., description="Whether model is loaded")
+
+class ScoutingSessionCreate(BaseModel):
+    total_plants: int
+    healthy_plants: int
+    infested_plants: int
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    primary_recommendation: Optional[str] = None
+
+class ScoutingSession(ScoutingSessionCreate):
+    id: int
+    created_at: str
+
+    model_config = ConfigDict(from_attributes=True)

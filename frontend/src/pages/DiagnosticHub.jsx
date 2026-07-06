@@ -145,8 +145,8 @@ export default function DiagnosticHub() {
       {/* Upload & Preview Area */}
       <section className="flex-1 flex flex-col gap-md">
         <div className="mb-sm">
-          <h2 className="font-headline-lg text-headline-lg font-semibold text-on-surface mb-xs">Capture & Identify</h2>
-          <p className="text-on-surface-variant font-body-md">Upload a photo of your maize to detect fall armyworm and get management advice.</p>
+          <h2 className="font-headline-lg text-2xl md:text-headline-lg font-semibold text-on-surface mb-xs">Capture & Identify</h2>
+          <p className="text-on-surface-variant text-sm md:font-body-md">Upload a photo of your maize to detect fall armyworm and get management advice.</p>
         </div>
 
         <div
@@ -172,8 +172,8 @@ export default function DiagnosticHub() {
               <div className="w-20 h-20 mx-auto mb-lg rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary text-4xl">photo_camera</span>
               </div>
-              <h3 className="font-headline-md text-headline-md font-bold text-on-surface mb-sm">Take or Upload Photo</h3>
-              <p className="text-on-surface-variant text-sm max-w-xs mx-auto">Snap a photo of the affected leaf or drag an image here to begin analysis.</p>
+              <h3 className="font-headline-md text-base md:text-headline-md font-bold text-on-surface mb-sm">Take or Upload Photo</h3>
+              <p className="text-on-surface-variant text-xs md:text-sm max-w-xs mx-auto">Snap a photo of the affected leaf or drag an image here to begin analysis.</p>
             </div>
           )}
 
@@ -208,7 +208,7 @@ export default function DiagnosticHub() {
       <aside className="w-full lg:w-[460px] flex flex-col gap-md" id="results-panel">
         <div className="flex items-center gap-sm mb-sm">
           <span className="material-symbols-outlined text-secondary">biotech</span>
-          <h3 className="font-headline-md text-headline-md text-on-surface">Analysis Results</h3>
+          <h3 className="font-headline-md text-base md:text-headline-md text-on-surface">Analysis Results</h3>
         </div>
 
         {isProcessing ? (
@@ -239,10 +239,10 @@ export default function DiagnosticHub() {
                       <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${severity.color}`}></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-sm mb-xs">
-                          <h4 className={`font-headline-md text-sm font-bold ${severity.text} truncate`}>
+                          <h4 className={`font-headline-md text-xs md:text-sm font-bold ${severity.text} truncate`}>
                             {details.display_name || det.class_name.replace(/-/g, ' ').toUpperCase()}
                           </h4>
-                          <span className={`font-label-sm text-label-sm px-2 py-0.5 rounded-full ${severity.color}/20 ${severity.text} shrink-0`}>
+                          <span className={`font-label-sm text-[10px] md:text-label-sm px-2 py-0.5 rounded-full ${severity.color}/20 ${severity.text} shrink-0`}>
                             {severity.label}
                           </span>
                         </div>
@@ -253,11 +253,11 @@ export default function DiagnosticHub() {
                               style={{ width: `${det.confidence * 100}%` }}
                             ></div>
                           </div>
-                          <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0">
+                          <span className="font-label-sm text-[10px] md:text-label-sm text-on-surface-variant shrink-0">
                             {(det.confidence * 100).toFixed(1)}%
                           </span>
                         </div>
-                        <p className="text-on-surface-variant text-xs leading-relaxed line-clamp-2">
+                        <p className="text-on-surface-variant text-[10px] md:text-xs leading-relaxed line-clamp-2">
                           {details.description || det.recommendation}
                         </p>
                       </div>
@@ -281,16 +281,16 @@ export default function DiagnosticHub() {
                                 onClick={(e) => { e.stopPropagation(); toggleSection(idx, key); }}
                                 className="w-full flex items-center gap-sm p-sm px-md hover:bg-white/5 transition-colors"
                               >
-                                <span className="material-symbols-outlined text-sm text-primary">{config.icon}</span>
-                                <span className="font-label-md text-label-md text-on-surface flex-1 text-left">{config.label}</span>
-                                <span className={`material-symbols-outlined text-on-surface-variant text-sm transition-transform duration-200 ${isSectionOpen ? 'rotate-180' : ''}`}>
+                                <span className="material-symbols-outlined text-xs md:text-sm text-primary">{config.icon}</span>
+                                <span className="font-label-md text-xs md:text-label-md text-on-surface flex-1 text-left">{config.label}</span>
+                                <span className={`material-symbols-outlined text-on-surface-variant text-xs md:text-sm transition-transform duration-200 ${isSectionOpen ? 'rotate-180' : ''}`}>
                                   expand_more
                                 </span>
                               </button>
                               {isSectionOpen && (
                                 <ul className="px-md pb-sm space-y-xs">
                                   {items.map((item, i) => (
-                                    <li key={i} className="flex gap-sm text-xs text-on-surface/85 leading-relaxed">
+                                    <li key={i} className="flex gap-sm text-[10px] md:text-xs text-on-surface/85 leading-relaxed">
                                       <span className="text-primary mt-0.5 shrink-0">•</span>
                                       <span>{item}</span>
                                     </li>
@@ -306,20 +306,20 @@ export default function DiagnosticHub() {
                           <div className="mt-sm p-sm px-md rounded-lg bg-secondary/5 border border-secondary/20">
                             <div className="flex items-center gap-xs mb-xs">
                               <span className="material-symbols-outlined text-secondary text-sm">public</span>
-                              <span className="font-label-sm text-label-sm text-secondary">
+                              <span className="font-label-sm text-[10px] md:text-label-sm text-secondary">
                                 {details.region_advisory.region_name} Advisory
                               </span>
                             </div>
-                            <p className="text-xs text-on-surface/70 leading-relaxed">{details.region_advisory.advisory}</p>
+                            <p className="text-[10px] md:text-xs text-on-surface/70 leading-relaxed">{details.region_advisory.advisory}</p>
                           </div>
                         )}
 
                         {/* Sources */}
                         {details.sources && details.sources.length > 0 && (
                           <div className="pt-sm border-t border-white/5">
-                            <span className="font-label-sm text-label-sm text-on-surface-variant block mb-xs">Sources</span>
+                            <span className="font-label-sm text-[10px] md:text-label-sm text-on-surface-variant block mb-xs">Sources</span>
                             {details.sources.map((src, i) => (
-                              <p key={i} className="text-[10px] text-on-surface-variant/60 leading-relaxed">— {src}</p>
+                              <p key={i} className="text-[8px] md:text-[10px] text-on-surface-variant/60 leading-relaxed">— {src}</p>
                             ))}
                           </div>
                         )}
@@ -331,16 +331,16 @@ export default function DiagnosticHub() {
             ) : (
               <div className="glass-panel rounded-xl p-lg text-center border border-primary/20">
                 <span className="material-symbols-outlined text-primary text-4xl mb-sm block">search</span>
-                <p className="font-headline-md text-primary mb-xs">No Pests Detected</p>
-                <p className="text-on-surface-variant text-sm mb-4">Make sure you are standing very close to the plant (10-20cm) and the image is not blurry.</p>
-                <p className="text-on-surface-variant text-sm font-semibold">If your photo was a wide shot of the field, please try again closer! Otherwise, continue routine scouting.</p>
+                <p className="font-headline-md text-sm md:text-base text-primary mb-xs">No Pests Detected</p>
+                <p className="text-on-surface-variant text-xs md:text-sm mb-4">Make sure you are standing very close to the plant (10-20cm) and the image is not blurry.</p>
+                <p className="text-on-surface-variant text-xs md:text-sm font-semibold">If your photo was a wide shot of the field, please try again closer! Otherwise, continue routine scouting.</p>
               </div>
             )}
           </div>
         ) : (
           <div className="glass-panel rounded-xl p-xl flex flex-col items-center justify-center text-center min-h-[300px]">
             <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-md">data_usage</span>
-            <p className="font-body-md text-on-surface-variant">Upload a photo to begin analysis.</p>
+            <p className="font-body-md text-sm md:text-base text-on-surface-variant">Upload a photo to begin analysis.</p>
           </div>
         )}
       </aside>

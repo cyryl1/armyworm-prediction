@@ -1,11 +1,9 @@
 """
-Site-specific pest management recommendations.
+Site-specific pest management recommendations with live API-first approach.
 
 Guidance sourced from:
-  - FAO Technical Guide on Fall Armyworm Management (2018)
-  - CABI Invasive Species Compendium — Fall Armyworm
-  - CIMMYT Integrated Pest Management Guidelines for Maize
-  - TAAT (Technologies for African Agricultural Transformation) FAW briefs
+  - Live EPPO Global Database API (Taxonomy, distribution, biological control agents)
+  - Hardcoded Fallback: FAO Technical Guide, CABI Compendium, CIMMYT Guidelines
 
 Each detection class maps to a structured management protocol with cultural,
 biological, and chemical control tiers plus long-term prevention advice.
@@ -13,7 +11,15 @@ biological, and chemical control tiers plus long-term prevention advice.
 
 from __future__ import annotations
 
+import os
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
+import logging
+
+from app.api_client import api_client
+from app.cache import recommendation_cache
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +66,7 @@ REGION_ADVISORY: Dict[str, Dict[str, str]] = {
 
 
 def _resolve_region(latitude: Optional[float], longitude: Optional[float]) -> str:
-    """Map GPS coordinates to a broad advisory region.
-
-    This is a simplified classifier. A production system would use a proper
-    reverse-geocoding service or country-boundary lookup.
-    """
+    """Map GPS coordinates to a broad advisory region."""
     if latitude is None or longitude is None:
         return "default"
 
@@ -80,7 +82,20 @@ def _resolve_region(latitude: Optional[float], longitude: Optional[float]) -> st
 
 
 # ---------------------------------------------------------------------------
-# Per-class management protocols
+# Live API Mappings
+# ---------------------------------------------------------------------------
+
+CLASS_TO_EPPO_CODE = {
+    "fall-armyworm-egg": "LAPHFR",  # Spodoptera frugiperda
+    "fall-armyworm-frass": "LAPHFR",
+    "fall-armyworm-larva": "LAPHFR",
+    "fall-armyworm-larval-damage": "LAPHFR",
+    "maize-streak-disease": "MSV000",  # Maize streak virus
+    "healthy-maize": None,
+}
+
+# ---------------------------------------------------------------------------
+# Hardcoded Fallback Protocols
 # ---------------------------------------------------------------------------
 
 MANAGEMENT_PROTOCOLS: Dict[str, dict] = {
@@ -295,16 +310,8 @@ MANAGEMENT_PROTOCOLS: Dict[str, dict] = {
     },
 }
 
-
-def get_recommendation_details(
-    class_name: str,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-) -> dict:
-    """Return structured management guidance for a detected class.
-
-    Includes region-specific advisory when GPS coordinates are available.
-    """
+def _get_fallback_details(class_name: str, latitude: Optional[float] = None, longitude: Optional[float] = None) -> dict:
+    """Get hardcoded details for sync requests or when live APIs fail."""
     protocol = MANAGEMENT_PROTOCOLS.get(class_name)
     if protocol is None:
         protocol = {
@@ -326,7 +333,96 @@ def get_recommendation_details(
     return {
         **protocol,
         "region_advisory": region,
+        "data_source": "offline",
     }
+
+def _merge_live_data(fallback: dict, eppo_data: Optional[dict]) -> dict:
+    """Merge live API data into the recommendation shape."""
+    merged = fallback.copy()
+    sources = merged.get("sources", []).copy()
+    
+    if eppo_data:
+        overview = eppo_data.get("overview", {})
+        if overview and "prefname" in overview:
+            # We append the scientific name
+            merged["display_name"] = f"{merged.get('display_name', '')} ({overview.get('prefname', '')})"
+            sources.append("EPPO Global Database (Live API)")
+            
+        bcas = eppo_data.get("bca", [])
+        if bcas:
+            # Add biological control agents from EPPO
+            bca_names = [b.get("prefname") for b in bcas if b.get("prefname")]
+            if bca_names:
+                merged["biological_control"] = merged.get("biological_control", []) + [
+                    f"EPPO registered BCA: {name}" for name in bca_names[:5] # Max 5 to avoid overwhelming UI
+                ]
+                
+    merged["sources"] = sources
+    merged["data_source"] = "live"
+    merged["recommendation_last_updated"] = datetime.now(timezone.utc).isoformat()
+    return merged
+
+
+async def get_recommendation_details_async(
+    class_name: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> dict:
+    """
+    Async fetch recommendation details. 
+    Tries Cache -> Live APIs -> Hardcoded fallback.
+    """
+    # 1. Base fallback is always computed for region advisories and basic template
+    fallback = _get_fallback_details(class_name, latitude, longitude)
+    
+    # Healthy maize or unknown class: skip live lookup
+    if class_name not in CLASS_TO_EPPO_CODE or CLASS_TO_EPPO_CODE[class_name] is None:
+        return fallback
+        
+    # Check if live APIs are globally enabled via env
+    if os.getenv("LIVE_API_ENABLED", "true").lower() != "true":
+        return fallback
+
+    # 2. Check cache
+    cached_data = recommendation_cache.get(class_name)
+    if cached_data:
+        # Re-apply region based on passed lat/lon just in case it differs from cache
+        cached_data["region_advisory"] = fallback["region_advisory"]
+        cached_data["data_source"] = "cached"
+        return cached_data
+        
+    # 3. Fetch from Live APIs
+    eppo_code = CLASS_TO_EPPO_CODE.get(class_name)
+    
+    try:
+        eppo_data = await api_client.fetch_eppo_data(eppo_code) if eppo_code else None
+        
+        # If neither API returned data, just return fallback
+        if not eppo_data:
+            logger.debug(f"Live APIs returned no data for {class_name}, using fallback.")
+            return fallback
+            
+        merged = _merge_live_data(fallback, eppo_data)
+        
+        # Cache the resulting merged data (sans dynamic region)
+        cache_copy = merged.copy()
+        cache_copy.pop("region_advisory", None)
+        recommendation_cache.set(class_name, cache_copy)
+        
+        return merged
+        
+    except Exception as e:
+        logger.error(f"Error fetching live recommendations for {class_name}: {e}")
+        return fallback
+
+
+def get_recommendation_details(
+    class_name: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> dict:
+    """Return structured management guidance for a detected class (Sync Fallback)."""
+    return _get_fallback_details(class_name, latitude, longitude)
 
 
 def format_recommendation(class_name: str) -> str:
