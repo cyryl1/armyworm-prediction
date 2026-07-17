@@ -1,8 +1,7 @@
-"""
-Utility functions for file handling and image processing.
+"""Utility functions for file handling and image processing.
 
 This module provides helpers for managing uploaded files including
-validation, temporary storage, and cleanup operations.
+validation, temporary storage, annotation drawing, and cleanup operations.
 """
 
 import os
@@ -28,105 +27,56 @@ TEMP_DIR = Path("./temp")
 
 
 def init_temp_directory() -> None:
-    """Initialize temporary directory for file uploads.
-    
-    Creates temp directory if it doesn't exist.
-    """
+    """Initialize temporary directory for file uploads."""
     TEMP_DIR.mkdir(exist_ok=True)
     logger.info(f"Initialized temp directory: {TEMP_DIR}")
 
 
 def validate_file_extension(filename: str) -> bool:
-    """Validate if file has allowed image extension.
-    
-    Args:
-        filename: Name of the file to validate
-        
-    Returns:
-        True if file extension is allowed, False otherwise
-    """
+    """Validate if file has allowed image extension."""
     file_ext = Path(filename).suffix.lower()
     is_valid = file_ext in ALLOWED_EXTENSIONS
-    
     if not is_valid:
         logger.warning(f"Invalid file extension: {file_ext}")
-    
     return is_valid
 
 
 def validate_file_size(file_size: int, max_size_mb: int = 10) -> bool:
-    """Validate if file size is within limits.
-    
-    Args:
-        file_size: Size of file in bytes
-        max_size_mb: Maximum allowed size in megabytes
-        
-    Returns:
-        True if file size is acceptable, False otherwise
-    """
+    """Validate if file size is within limits."""
     max_bytes = max_size_mb * 1024 * 1024
     is_valid = file_size <= max_bytes
-    
     if not is_valid:
         logger.warning(f"File size {file_size} bytes exceeds limit {max_bytes}")
-    
     return is_valid
 
 
 def generate_unique_filename(original_filename: str) -> str:
-    """Generate unique filename to avoid collisions.
-    
-    Args:
-        original_filename: Original name of the uploaded file
-        
-    Returns:
-        Unique filename with UUID prefix
-    """
-    file_ext = Path(original_filename).suffix
+    """Generate unique filename to avoid collisions."""
     unique_id = str(uuid.uuid4())[:8]
     unique_filename = f"{unique_id}_{original_filename}"
-    
     return unique_filename
 
 
 def get_temp_file_path(filename: str) -> Path:
-    """Get full path for temporary file.
-    
-    Args:
-        filename: Name of the temporary file
-        
-    Returns:
-        Full path to temporary file
-    """
+    """Get full path for temporary file."""
     return TEMP_DIR / filename
 
 
 def save_uploaded_file(file_content: bytes, original_filename: str) -> Tuple[str, Path]:
     """Save uploaded file to temporary directory.
-    
-    Args:
-        file_content: Raw bytes of the uploaded file
-        original_filename: Original filename from upload
-        
+
     Returns:
         Tuple of (unique_filename, full_file_path)
-        
-    Raises:
-        ValueError: If file validation fails
     """
-    # Validate extension
     if not validate_file_extension(original_filename):
         raise ValueError(f"Invalid file type: {original_filename}")
-    
-    # Validate size
+
     if not validate_file_size(len(file_content)):
-        raise ValueError(f"File size exceeds maximum limit")
-    
-    # Generate unique filename
+        raise ValueError("File size exceeds maximum limit")
+
     unique_filename = generate_unique_filename(original_filename)
     file_path = get_temp_file_path(unique_filename)
-    
-    # Save file
+
     try:
         with open(file_path, "wb") as f:
             f.write(file_content)
@@ -138,14 +88,7 @@ def save_uploaded_file(file_content: bytes, original_filename: str) -> Tuple[str
 
 
 def delete_file(file_path: Path) -> bool:
-    """Delete temporary file after processing.
-    
-    Args:
-        file_path: Path to file to delete
-        
-    Returns:
-        True if successful, False otherwise
-    """
+    """Delete temporary file after processing."""
     try:
         if file_path.exists():
             os.remove(file_path)
@@ -215,44 +158,30 @@ def extract_gps_from_exif(image_path: Path) -> Tuple[Optional[float], Optional[f
 
 
 _CLASS_COLORS: dict[str, tuple[int, int, int]] = {
-    "fall-armyworm-egg": (0, 180, 255),       # orange (BGR)
-    "fall-armyworm-frass": (0, 140, 220),      # dark orange
-    "fall-armyworm-larva": (60, 60, 255),      # red
-    "fall-armyworm-larval-damage": (0, 165, 255),  # orange
-    "healthy-maize": (80, 220, 80),            # green
-    "maize-streak-disease": (200, 80, 180),    # purple
+    "fall-armyworm-egg": (0, 180, 255),
+    "fall-armyworm-frass": (0, 140, 220),
+    "fall-armyworm-larva": (60, 60, 255),
+    "fall-armyworm-larval-damage": (0, 165, 255),
+    "healthy-maize": (80, 220, 80),
+    "maize-streak-disease": (200, 80, 180),
 }
 
-_DEFAULT_COLOR = (0, 200, 200)  # yellow fallback
+_DEFAULT_COLOR = (0, 200, 200)
 
 
 def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
-    """Draw bounding boxes and labels on an image array (in-place).
-
-    Uses class-specific colours. Boxes that cover >90% of the image area
-    are treated as whole-image classifications — a label banner is drawn
-    at the top instead of a full rectangle, so the image stays clean.
-
-    Args:
-        image: BGR image as a numpy array.
-        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
-
-    Returns:
-        The same image array with annotations drawn.
-    """
+    """Draw bounding boxes and labels on an image array (in-place)."""
     img_h, img_w = image.shape[:2]
     img_area = img_h * img_w
-    banner_offset = 0  # stacks banners if multiple full-image detections
+    banner_offset = 0
 
     for detection in detections:
-        # Use pixel coords for drawing; fall back to 'bbox' for compatibility
         bbox = detection.get("bbox_pixel") or detection.get("bbox", [])
         if len(bbox) != 4:
             continue
 
         x1, y1, x2, y2 = [int(round(coord)) for coord in bbox]
 
-        # Clamp to image bounds
         x1 = max(0, min(x1, img_w - 1))
         y1 = max(0, min(y1, img_h - 1))
         x2 = max(0, min(x2, img_w - 1))
@@ -266,8 +195,6 @@ def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
         box_area = abs(x2 - x1) * abs(y2 - y1)
 
         if box_area > 0.9 * img_area:
-            # Whole-image classification — draw a label banner at the top
-            # instead of a rectangle that covers the entire image.
             font_scale = max(0.5, min(img_w / 800, 1.0))
             thickness = max(1, int(font_scale * 2))
             (tw, th), baseline = cv2.getTextSize(
@@ -276,66 +203,41 @@ def _draw_detections(image: np.ndarray, detections: list) -> np.ndarray:
             banner_h = th + 16
             banner_y = banner_offset
             overlay = image.copy()
-            cv2.rectangle(
-                overlay,
-                (0, banner_y),
-                (img_w, banner_y + banner_h),
-                color,
-                -1,
-            )
+            cv2.rectangle(overlay, (0, banner_y), (img_w, banner_y + banner_h), color, -1)
             cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
             cv2.putText(
-                image,
-                label,
-                (10, banner_y + th + 8),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (255, 255, 255),
-                thickness,
-                cv2.LINE_AA,
+                image, label, (10, banner_y + th + 8),
+                cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, cv2.LINE_AA,
             )
             banner_offset += banner_h + 4
         else:
-            # Normal tight bounding box around the detection
             line_thickness = max(2, int(min(img_w, img_h) / 300))
-
-            # Draw box
             cv2.rectangle(image, (x1, y1), (x2, y2), color, line_thickness)
 
-            # Draw corner accents for a cleaner look
             corner_len = max(10, int(min(abs(x2 - x1), abs(y2 - y1)) * 0.15))
             ct = line_thickness + 1
-            # Top-left
             cv2.line(image, (x1, y1), (x1 + corner_len, y1), color, ct)
             cv2.line(image, (x1, y1), (x1, y1 + corner_len), color, ct)
-            # Top-right
             cv2.line(image, (x2, y1), (x2 - corner_len, y1), color, ct)
             cv2.line(image, (x2, y1), (x2, y1 + corner_len), color, ct)
-            # Bottom-left
             cv2.line(image, (x1, y2), (x1 + corner_len, y2), color, ct)
             cv2.line(image, (x1, y2), (x1, y2 - corner_len), color, ct)
-            # Bottom-right
             cv2.line(image, (x2, y2), (x2 - corner_len, y2), color, ct)
             cv2.line(image, (x2, y2), (x2, y2 - corner_len), color, ct)
 
-            # Label with filled background
             font_scale = max(0.4, min(img_w / 1000, 0.8))
             thickness = max(1, int(font_scale * 2))
             (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
             label_y = max(y1 - 6, th + 10)
             label_x = x1
 
-            # Background rectangle for label
             overlay = image.copy()
             cv2.rectangle(overlay, (label_x, label_y - th - 6), (label_x + tw + 10, label_y + 4), color, -1)
             cv2.addWeighted(overlay, 0.75, image, 0.25, 0, image)
 
-            # White text
             cv2.putText(
-                image, label,
-                (label_x + 5, label_y - 2),
-                cv2.FONT_HERSHEY_SIMPLEX, font_scale,
-                (255, 255, 255), thickness, cv2.LINE_AA,
+                image, label, (label_x + 5, label_y - 2),
+                cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, cv2.LINE_AA,
             )
 
     return image
@@ -364,19 +266,7 @@ def annotate_detections_to_base64(
     detections: list,
     jpeg_quality: int = 70,
 ) -> str:
-    """Draw detection boxes on an image and return as a base64-encoded JPEG.
-
-    Args:
-        image_path: Path to the source image file.
-        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
-        jpeg_quality: JPEG compression quality (1-100).
-
-    Returns:
-        Base64-encoded JPEG string of the annotated image.
-
-    Raises:
-        ValueError: If the image cannot be read.
-    """
+    """Draw detection boxes on an image and return as a base64-encoded JPEG."""
     image = cv2.imread(str(image_path))
     if image is None:
         raise ValueError(f"Cannot read image for annotation: {image_path}")
@@ -398,19 +288,7 @@ def annotate_image_array_to_base64(
     detections: list,
     jpeg_quality: int = 70,
 ) -> str:
-    """Draw detection boxes on an in-memory image array and return as base64 JPEG.
-
-    Args:
-        image: BGR image as a numpy array.
-        detections: List of detection dicts with 'bbox', 'class_name', 'confidence'.
-        jpeg_quality: JPEG compression quality (1-100).
-
-    Returns:
-        Base64-encoded JPEG string of the annotated image.
-
-    Raises:
-        ValueError: If the image is None or empty.
-    """
+    """Draw detection boxes on an in-memory image array and return as base64 JPEG."""
     if image is None or image.size == 0:
         raise ValueError("Cannot annotate empty or None image")
 
@@ -427,10 +305,7 @@ def annotate_image_array_to_base64(
 
 
 def cleanup_temp_directory() -> None:
-    """Clean up temporary directory by removing all files.
-    
-    Useful for cleanup on shutdown or maintenance.
-    """
+    """Clean up temporary directory by removing all files."""
     try:
         if TEMP_DIR.exists():
             for file in TEMP_DIR.glob("*"):

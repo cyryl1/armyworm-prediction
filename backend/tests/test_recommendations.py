@@ -1,6 +1,6 @@
 """Tests for recommendation logic."""
 
-from app import recommendations
+from app.infrastructure.external import recommendations
 
 
 class TestRecommendations:

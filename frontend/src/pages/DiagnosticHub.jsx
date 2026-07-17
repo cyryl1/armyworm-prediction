@@ -54,13 +54,14 @@ export default function DiagnosticHub() {
     const endpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
 
     try {
-      const res = await fetch(`${endpoint}/detect`, {
+      // 1. Submit image — returns DetectionResponse
+      const submitRes = await fetch(`${endpoint}/detect`, {
         method: 'POST',
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
+      if (!submitRes.ok) throw new Error("Upload failed");
+      const data = await submitRes.json();
 
       if (data.annotated_image) {
         setAnnotatedImage(`data:image/jpeg;base64,${data.annotated_image}`);

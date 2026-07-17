@@ -32,6 +32,7 @@ export default function LiveStream() {
   const bytesSentRef = useRef(0);
   const lastFpsTimeRef = useRef(Date.now());
   const frameSentTimeRef = useRef(0);
+  const isWaitingForAIRef = useRef(false);
 
   const addLogEntry = useCallback((detection) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -65,6 +66,11 @@ export default function LiveStream() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        try {
+          await videoRef.current.play();
+        } catch (e) {
+          console.warn("Video play error:", e);
+        }
       }
       connectWebSocket();
     } catch (err) {
@@ -86,6 +92,7 @@ export default function LiveStream() {
     };
 
     wsRef.current.onmessage = (event) => {
+      isWaitingForAIRef.current = false;
       const data = JSON.parse(event.data);
       if (data.annotated_frame) {
         setPreviewSrc(`data:image/jpeg;base64,${data.annotated_frame}`);
@@ -115,6 +122,9 @@ export default function LiveStream() {
   const statsIntervalRef = useRef(null);
 
   const startCapture = useCallback(() => {
+    if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 480;
@@ -124,22 +134,32 @@ export default function LiveStream() {
     bytesSentRef.current = 0;
 
     captureIntervalRef.current = setInterval(() => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && videoRef.current && videoRef.current.readyState >= 2) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      if (
+        wsRef.current && 
+        wsRef.current.readyState === WebSocket.OPEN && 
+        videoRef.current && 
+        videoRef.current.readyState >= 2 &&
+        videoRef.current.videoWidth > 0 &&
+        !isWaitingForAIRef.current
+      ) {
+        try {
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-        const b64 = dataUrl.split(',')[1];
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          const b64 = dataUrl.split(',')[1];
 
-        if (wsRef.current.bufferedAmount === 0) {
           const payload = JSON.stringify({ frame: b64 });
           wsRef.current.send(payload);
           frameSentTimeRef.current = Date.now();
+          isWaitingForAIRef.current = true;
 
           bytesSentRef.current += payload.length;
           framesSentRef.current++;
+        } catch (e) {
+          console.error("Frame capture error:", e);
         }
       }
-    }, 200);
+    }, 66); // Max 15 FPS
 
     statsIntervalRef.current = setInterval(() => {
       setStats(prev => ({

@@ -1,20 +1,23 @@
-"""
-FastAPI application for pest detection using YOLOv8.
+"""FastAPI application for pest detection using YOLOv8.
 
-This module defines the main FastAPI application with endpoints for
-pest detection, health checks, and class information retrieval.
+This module defines the main FastAPI application, wires together the
+clean architecture layers, and handles application lifecycle events.
 """
 
 import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-from app import detector, utils, models, database
-from app.api_client import api_client
-from app.routes import router as api_router
+from app.infrastructure.db import database as db_module
+from app.infrastructure.db.models import ScoutingSessionModel  # noqa: F401 — ensures table creation
+from app.infrastructure.external.api_client import api_client
+from app.infrastructure.utils import init_temp_directory, cleanup_temp_directory
+from app.presentation.rest.routes import router as api_router, _detector
+from app.presentation.websocket.stream import ws_router, get_stream_detector
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +33,7 @@ load_dotenv()
 app = FastAPI(
     title="Pest Detection API",
     description="YOLOv8-based pest detection system for fall armyworms and maize diseases",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 # Add CORS Middleware to support web frontend queries
@@ -41,7 +44,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 def custom_openapi():
@@ -61,32 +63,39 @@ app.openapi = custom_openapi
 
 # Include modular routes
 app.include_router(api_router)
+app.include_router(ws_router)
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize resources on application startup.
-    
+
     - Initializes temporary directory for file uploads
-    - Loads YOLOv8 model into memory
+    - Loads YOLOv8 model into memory (for WebSocket stream; Celery workers load their own)
+    - Initializes database tables
+    - Initializes external API client
     """
-    logger.info("Starting up Pest Detection API...")
-    
+    logger.info("Starting up Pest Detection API (v2 — Clean Architecture)...")
+
     # Initialize temp directory
-    utils.init_temp_directory()
-    
+    init_temp_directory()
+
     # Initialize API client
     api_client.init_client()
-    
+
     # Initialize database tables
     logger.info("Initializing database tables...")
-    models.Base.metadata.create_all(bind=database.engine)
-    
-    # Load model at startup (do not crash the app if model fails to load)
+    db_module.Base.metadata.create_all(bind=db_module.engine)
+
+    # Load model for the WebSocket live stream (sync inference in-process)
+    # The Celery worker loads its own model instance separately.
     try:
-        # Let detector decide device (defaults to CPU if CUDA unavailable)
-        detector.load_model("model/best.pt", device=None)
-        logger.info("Model loaded successfully at startup")
+        _detector.load_model("model/best.pt", device=None)
+        # The stream detector is the same class but a different instance;
+        # load it too so the WebSocket handler works.
+        stream_det = get_stream_detector()
+        stream_det.load_model("model/best.pt", device=None)
+        logger.info("Model loaded successfully at startup (for live stream)")
     except Exception as e:
         logger.error(f"Failed to load model at startup: {e}")
         logger.warning("Continuing without loaded model; /health will report model_loaded=False")
@@ -94,29 +103,15 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Clean up resources on application shutdown.
-    
-    - Removes temporary files
-    - Performs cleanup operations
-    """
+    """Clean up resources on application shutdown."""
     logger.info("Shutting down Pest Detection API...")
-    utils.cleanup_temp_directory()
+    cleanup_temp_directory()
     await api_client.close()
-
-
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Global exception handler for unhandled errors.
-    
-    Args:
-        request: The request that caused the error
-        exc: The exception that was raised
-        
-    Returns:
-        JSON error response with 500 status
-    """
+    """Global exception handler for unhandled errors."""
     logger.error(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
@@ -124,13 +119,9 @@ async def global_exception_handler(request, exc):
     )
 
 
-# All route handlers are implemented in `app.routes` and registered above.
-
-
 if __name__ == "__main__":
     import uvicorn
-    
-    # Run development server
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

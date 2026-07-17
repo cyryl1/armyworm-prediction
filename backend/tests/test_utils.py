@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image
 import cv2
 
-from app import utils
+from app.infrastructure import utils
 
 
 class TestGPSExtraction:
