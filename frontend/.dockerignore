@@ -2,3 +2,8 @@ node_modules
 dist
 .env
 .DS_Store
+.git
+.github
+Dockerfile
+docker-compose.yml
+README.md
