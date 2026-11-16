@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 const SEVERITY_COLORS = {
   none:    'primary',
@@ -30,7 +30,6 @@ export default function LiveStream() {
 
   const framesSentRef = useRef(0);
   const bytesSentRef = useRef(0);
-  const lastFpsTimeRef = useRef(Date.now());
   const frameSentTimeRef = useRef(0);
   const isWaitingForAIRef = useRef(false);
 
@@ -57,67 +56,6 @@ export default function LiveStream() {
 
     setLogs(prev => [newLog, ...prev].slice(0, 30));
   }, []);
-
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'environment' }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        try {
-          await videoRef.current.play();
-        } catch (e) {
-          console.warn("Video play error:", e);
-        }
-      }
-      connectWebSocket();
-    } catch (err) {
-      console.error("Error accessing webcam:", err);
-      alert('Could not access camera. Please allow camera permission.');
-    }
-  }, []);
-
-  const connectWebSocket = useCallback(() => {
-    const endpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
-    const wsUrl = endpoint.replace(/^http/, 'ws') + '/detect/stream';
-
-    wsRef.current = new WebSocket(wsUrl);
-
-    wsRef.current.onopen = () => {
-      setIsConnected(true);
-      setIsStreaming(true);
-      startCapture();
-    };
-
-    wsRef.current.onmessage = (event) => {
-      isWaitingForAIRef.current = false;
-      const data = JSON.parse(event.data);
-      if (data.annotated_frame) {
-        setPreviewSrc(`data:image/jpeg;base64,${data.annotated_frame}`);
-      }
-
-      if (data.detections && data.detections.length > 0) {
-        data.detections.forEach(d => addLogEntry(d));
-      }
-
-      // Measure real round-trip latency
-      if (frameSentTimeRef.current > 0) {
-        const rtt = Date.now() - frameSentTimeRef.current;
-        setStats(prev => ({ ...prev, latency: `${rtt} ms` }));
-      }
-    };
-
-    wsRef.current.onerror = () => {
-      setIsConnected(false);
-    };
-
-    wsRef.current.onclose = () => {
-      setIsConnected(false);
-      setIsStreaming(false);
-    };
-  }, [addLogEntry]);
 
   const statsIntervalRef = useRef(null);
 
@@ -182,10 +120,71 @@ export default function LiveStream() {
     setPreviewSrc(null);
   }, []);
 
+  const connectWebSocket = useCallback(() => {
+    const endpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
+    const wsUrl = endpoint.replace(/^http/, 'ws') + '/detect/stream';
+
+    wsRef.current = new WebSocket(wsUrl);
+
+    wsRef.current.onopen = () => {
+      setIsConnected(true);
+      setIsStreaming(true);
+      startCapture();
+    };
+
+    wsRef.current.onmessage = (event) => {
+      isWaitingForAIRef.current = false;
+      const data = JSON.parse(event.data);
+      if (data.annotated_frame) {
+        setPreviewSrc(`data:image/jpeg;base64,${data.annotated_frame}`);
+      }
+
+      if (data.detections && data.detections.length > 0) {
+        data.detections.forEach(d => addLogEntry(d));
+      }
+
+      // Measure real round-trip latency
+      if (frameSentTimeRef.current > 0) {
+        const rtt = Date.now() - frameSentTimeRef.current;
+        setStats(prev => ({ ...prev, latency: `${rtt} ms` }));
+      }
+    };
+
+    wsRef.current.onerror = () => {
+      setIsConnected(false);
+    };
+
+    wsRef.current.onclose = () => {
+      setIsConnected(false);
+      setIsStreaming(false);
+    };
+  }, [addLogEntry, startCapture]);
+
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'environment' }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        try {
+          await videoRef.current.play();
+        } catch (e) {
+          console.warn("Video play error:", e);
+        }
+      }
+      connectWebSocket();
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      alert('Could not access camera. Please allow camera permission.');
+    }
+  }, [connectWebSocket]);
+
   useEffect(() => {
     startCamera();
     return () => stopEverything();
-  }, []);
+  }, [startCamera, stopEverything]);
 
   const handleToggle = () => {
     if (isStreaming) {

@@ -16,10 +16,6 @@ from ultralytics import YOLO
 
 from app.domain.entities import CLASS_NAMES
 from app.domain.interfaces.ml_model import PestDetectorInterface
-from app.infrastructure.external.recommendations import (
-    format_recommendation,
-    get_recommendation_details,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +98,6 @@ class YOLOPestDetector(PestDetectorInterface):
                     class_name = CLASS_NAMES.get(class_id, f"unknown_class_{class_id}")
                     confidence = float(box.conf[0].item())
 
-                    recommendation = format_recommendation(class_name)
-                    recommendation_details = get_recommendation_details(class_name)
-
                     bbox_normalized = [
                         x1 / img_w,
                         y1 / img_h,
@@ -118,8 +111,6 @@ class YOLOPestDetector(PestDetectorInterface):
                         "confidence": confidence,
                         "bbox": bbox_normalized,
                         "bbox_pixel": [x1, y1, x2, y2],
-                        "recommendation": recommendation,
-                        "recommendation_details": recommendation_details,
                     }
                     detections.append(detection)
                     logger.info(

@@ -20,7 +20,10 @@ import cv2
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.infrastructure.ml.yolo_detector import get_detector
-from app.infrastructure.external.recommendations import get_recommendation_details_async
+from app.infrastructure.external.recommendations import (
+    format_recommendation,
+    get_recommendation_details_async,
+)
 from app.infrastructure.utils import (
     get_temp_file_path,
     delete_file,
@@ -92,6 +95,7 @@ async def websocket_stream(websocket: WebSocket):
 
                     for d in result["detections"]:
                         live_rec = await get_recommendation_details_async(d["class_name"])
+                        d["recommendation"] = format_recommendation(d["class_name"])
                         d["recommendation_details"] = live_rec
                         d["data_source"] = live_rec.get("data_source", "offline")
                         d["recommendation_last_updated"] = live_rec.get("recommendation_last_updated")

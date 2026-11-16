@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const SEVERITY_CONFIG = {
   none:    { color: 'bg-primary',    text: 'text-primary',    border: 'border-primary/30',    label: 'HEALTHY' },

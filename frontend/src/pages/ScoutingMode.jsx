@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 const THRESHOLD = 20; // 20% infestation threshold
 

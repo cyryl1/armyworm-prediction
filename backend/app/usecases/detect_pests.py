@@ -11,7 +11,10 @@ import logging
 from typing import Optional, Dict, Any
 
 from app.infrastructure.ml.yolo_detector import YOLOPestDetector
-from app.infrastructure.external.recommendations import get_recommendation_details
+from app.infrastructure.external.recommendations import (
+    format_recommendation,
+    get_recommendation_details,
+)
 from app.infrastructure.utils import (
     validate_file_extension,
     validate_file_size,
@@ -70,6 +73,7 @@ class DetectPestsUseCase:
                     latitude=gps_latitude,
                     longitude=gps_longitude,
                 )
+                d["recommendation"] = format_recommendation(d["class_name"])
                 d["recommendation_details"] = live_rec
                 d["data_source"] = live_rec.get("data_source", "offline")
                 d["recommendation_last_updated"] = live_rec.get("recommendation_last_updated")
