@@ -198,9 +198,9 @@ export default function LiveStream() {
   return (
     <div className="flex flex-col lg:flex-row min-h-[calc(100vh-64px)] lg:h-[calc(100vh-64px)] lg:overflow-hidden md:ml-sidebar-width">
       {/* Video Feed */}
-      <section className="w-full h-[55vh] shrink-0 lg:h-auto lg:flex-1 p-lg flex flex-col gap-md">
-        <div className="relative w-full flex-1 min-h-0 glass-panel rounded-xl overflow-hidden" id="live-feed">
-          <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+      <section className="w-full shrink-0 lg:flex-1 p-lg flex flex-col gap-md">
+        <div className="relative w-full aspect-[3/4] min-h-[320px] max-h-[70dvh] lg:aspect-auto lg:max-h-none lg:min-h-0 lg:flex-1 glass-panel rounded-xl overflow-hidden" id="live-feed">
+          <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
           
           {/* AI Vision Thumbnail */}
           {previewSrc && isStreaming && (
