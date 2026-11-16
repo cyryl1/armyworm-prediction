@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import DiagnosticHub from './pages/DiagnosticHub';
 import LiveStream from './pages/LiveStream';
 import ScoutingMode from './pages/ScoutingMode';
+import Bench from './pages/Bench';
 
 export default function App() {
   const location = useLocation();
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/" element={<DiagnosticHub />} />
           <Route path="/stream" element={<LiveStream />} />
           <Route path="/scout" element={<ScoutingMode />} />
+          <Route path="/bench" element={<Bench />} />
         </Routes>
       </main>
 

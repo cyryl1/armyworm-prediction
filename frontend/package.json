@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "copy-ort": "node scripts/copy-ort.mjs",
+    "predev": "node scripts/copy-ort.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-ort.mjs",
     "build": "vite build",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview"
@@ -24,6 +27,7 @@
   },
   "dependencies": {
     "lucide-react": "^1.17.0",
+    "onnxruntime-web": "^1.31.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.17.0"
