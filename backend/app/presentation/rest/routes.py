@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.domain.entities import ScoutingSessionEntity
 from app.infrastructure.db.database import get_db
 from app.infrastructure.db.repository import SQLAlchemyScoutingSessionRepository
-from app.infrastructure.ml.yolo_detector import YOLOPestDetector
+from app.infrastructure.ml.yolo_detector import get_detector
 from app.presentation.rest.schemas import (
     ClassesResponse,
     Detection,
@@ -31,10 +31,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ---------------------------------------------------------------------------
-# Singleton instances (created once, reused across requests)
-# ---------------------------------------------------------------------------
-_detector = YOLOPestDetector()
+# Shared detector (same instance as the WebSocket stream); loaded in main.py startup.
+_detector = get_detector()
 
 
 # ---------------------------------------------------------------------------

@@ -141,3 +141,18 @@ class YOLOPestDetector(PestDetectorInterface):
 
     def get_all_classes(self) -> Dict[int, str]:
         return CLASS_NAMES.copy()
+
+
+# ---------------------------------------------------------------------------
+# Shared instance
+# ---------------------------------------------------------------------------
+
+_shared_detector: Optional[YOLOPestDetector] = None
+
+
+def get_detector() -> YOLOPestDetector:
+    """Return the process-wide detector so REST and WebSocket share one model."""
+    global _shared_detector
+    if _shared_detector is None:
+        _shared_detector = YOLOPestDetector()
+    return _shared_detector

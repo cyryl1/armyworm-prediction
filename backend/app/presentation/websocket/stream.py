@@ -2,7 +2,7 @@
 
 The live video stream stays synchronous in the main FastAPI process
 (using thread executor for blocking YOLO inference) as per the
-approved architecture decision — no Celery overhead for real-time frames.
+design decision — no background queue for real-time frames.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 import cv2
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.infrastructure.ml.yolo_detector import YOLOPestDetector
+from app.infrastructure.ml.yolo_detector import get_detector
 from app.infrastructure.external.recommendations import get_recommendation_details_async
 from app.infrastructure.utils import (
     get_temp_file_path,
@@ -31,14 +31,8 @@ logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
-# Re-use the same detector instance as the REST routes.
-# The model is loaded during startup in main.py.
-_detector = YOLOPestDetector()
-
-
-def get_stream_detector() -> YOLOPestDetector:
-    """Accessor for the stream's detector — allows startup to load the model."""
-    return _detector
+# Same detector instance as the REST routes; the model is loaded in main.py startup.
+_detector = get_detector()
 
 
 @ws_router.websocket("/detect/stream")

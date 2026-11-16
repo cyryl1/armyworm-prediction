@@ -44,25 +44,6 @@ class DetectionResponse(BaseModel):
     )
 
 
-class DetectionTaskSubmitted(BaseModel):
-    """API response returned immediately after enqueuing a detection task."""
-
-    task_id: str = Field(..., description="Celery task ID for polling")
-    status: str = Field(default="pending", description="Initial task status")
-
-
-class DetectionTaskStatus(BaseModel):
-    """API response for polling a detection task's progress."""
-
-    task_id: str = Field(..., description="Celery task ID")
-    status: str = Field(..., description="pending | processing | completed | failed")
-    result: Optional[DetectionResponse] = Field(
-        default=None,
-        description="Detection result (present only when status is 'completed')",
-    )
-    error: Optional[str] = Field(default=None, description="Error message if task failed")
-
-
 # ---------------------------------------------------------------------------
 # Information / status schemas
 # ---------------------------------------------------------------------------

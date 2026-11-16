@@ -16,8 +16,9 @@ from app.infrastructure.db import database as db_module
 from app.infrastructure.db.models import ScoutingSessionModel  # noqa: F401 — ensures table creation
 from app.infrastructure.external.api_client import api_client
 from app.infrastructure.utils import init_temp_directory, cleanup_temp_directory
-from app.presentation.rest.routes import router as api_router, _detector
-from app.presentation.websocket.stream import ws_router, get_stream_detector
+from app.infrastructure.ml.yolo_detector import get_detector
+from app.presentation.rest.routes import router as api_router
+from app.presentation.websocket.stream import ws_router
 
 # Configure logging
 logging.basicConfig(
@@ -71,7 +72,7 @@ async def startup_event():
     """Initialize resources on application startup.
 
     - Initializes temporary directory for file uploads
-    - Loads YOLOv8 model into memory (for WebSocket stream; Celery workers load their own)
+    - Loads the shared YOLOv8 model into memory (used by REST and WebSocket)
     - Initializes database tables
     - Initializes external API client
     """
@@ -87,15 +88,10 @@ async def startup_event():
     logger.info("Initializing database tables...")
     db_module.Base.metadata.create_all(bind=db_module.engine)
 
-    # Load model for the WebSocket live stream (sync inference in-process)
-    # The Celery worker loads its own model instance separately.
+    # Load the single shared model used by both REST and the live stream.
     try:
-        _detector.load_model("model/best.pt", device=None)
-        # The stream detector is the same class but a different instance;
-        # load it too so the WebSocket handler works.
-        stream_det = get_stream_detector()
-        stream_det.load_model("model/best.pt", device=None)
-        logger.info("Model loaded successfully at startup (for live stream)")
+        get_detector().load_model("model/best.pt", device=None)
+        logger.info("Model loaded successfully at startup")
     except Exception as e:
         logger.error(f"Failed to load model at startup: {e}")
         logger.warning("Continuing without loaded model; /health will report model_loaded=False")

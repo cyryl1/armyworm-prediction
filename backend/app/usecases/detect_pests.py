@@ -1,7 +1,7 @@
 """Use case: Detect pests in an uploaded image.
 
 Orchestrates file validation, temporary storage, GPS extraction,
-and submission to the background task queue.
+and synchronous YOLO inference.
 """
 
 from __future__ import annotations

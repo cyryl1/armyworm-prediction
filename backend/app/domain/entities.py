@@ -49,16 +49,6 @@ class DetectionResult:
     recommendation_last_updated: Optional[str] = None
 
 
-@dataclass
-class DetectionTaskResult:
-    """Result stored by an async detection task (Celery)."""
-    task_id: str
-    status: str  # "pending", "processing", "completed", "failed"
-    detections: List[DetectionResult] = field(default_factory=list)
-    annotated_image: Optional[str] = None  # base64 JPEG
-    error: Optional[str] = None
-
-
 # ---------------------------------------------------------------------------
 # Scouting domain
 # ---------------------------------------------------------------------------
